@@ -373,6 +373,17 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
         <h2>Promised versus delivered</h2>
         {ledger && c ? (
           <>
+            {c.kept + c.missed + c.partial > 0 ? (
+              <div className="saydo">
+                <p className="figure sm">
+                  {c.kept}
+                  <span> of {c.kept + c.missed + c.partial} {c.kept + c.missed + c.partial === 1 ? "promise" : "promises"} kept</span>
+                </p>
+                <ScoreBar c={{ ...c, pending: 0, unverifiable: 0 }} />
+              </div>
+            ) : (
+              <p className="summary">No promise has come due yet on the calls FINN read.</p>
+            )}
             <div className="stamps big">
               <Stamp status="kept" count={c.kept} />
               {c.partial > 0 && <Stamp status="partial" count={c.partial} />}

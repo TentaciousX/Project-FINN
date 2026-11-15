@@ -147,6 +147,26 @@ export default function Today({ snap, settings, update, openSource, openCompany,
     };
   };
 
+  // One tile per holding: the latest session's move, and whether anything needs reading.
+  const tiles = useMemo(
+    () =>
+      snap.portfolio.map((h) => {
+        const p = snap.prices[h.symbol];
+        const k = p ? p.close.length - 1 : -1;
+        const chg = p && k > 0 ? (p.close[k] / p.close[k - 1] - 1) * 100 : null;
+        const m = mv.find((x) => x.symbol === h.symbol && p && x.date === p.dates[k]);
+        return {
+          symbol: h.symbol,
+          pct: chg,
+          heat: chg == null ? 0 : Math.min(1, Math.abs(chg) / 5),
+          matters: t1.filter((x) => x.a.symbol === h.symbol).length,
+          moved: Boolean(m),
+          unexplained: Boolean(m && !m.explainedBy),
+        };
+      }),
+    [snap, mv, t1]
+  );
+
   // Everything below counts filings, not cards: a card can carry folded companions.
   const n = (list: { a: Announcement }[]) => list.reduce((k, x) => k + 1 + (x.a.related?.length ?? 0), 0);
   const f1 = n(t1), f2 = n(t2), f3 = n(t3);
@@ -188,14 +208,18 @@ export default function Today({ snap, settings, update, openSource, openCompany,
           {t1.length}
           <span> of {total} filed</span>
         </h1>
-        <div className="range">
-          <span>{dayLabel(windowStart)}</span>
-          <i><b style={{ width: `${total ? Math.max(4, Math.round(((f1 + f2) / total) * 100)) : 0}%` }} /></i>
-          <span>{dayLabel(asOf)}</span>
+        <div className="funnel" role="img" aria-label={`${f1} filings matter, ${f2} worth a glance, ${f3} buried`}>
+          {f1 > 0 && <i className="a" style={{ flexGrow: f1 }} />}
+          {f2 > 0 && <i className="b" style={{ flexGrow: f2 }} />}
+          {f3 > 0 && <i className="c" style={{ flexGrow: f3 }} />}
         </div>
+        <ul className="legend">
+          <li><b className="a">{f1}</b>matter</li>
+          <li><b className="b">{f2}</b>worth a glance</li>
+          <li><b className="c">{f3}</b>buried</li>
+        </ul>
         <p className="asof">
-          {total ? `${f1} filings behind those ${t1.length}, ${f2} worth a glance, ${f3} buried as routine. ` : ""}
-          <Brief lines={brief} />
+          {dayLabel(windowStart)} to {dayLabel(asOf)}. <Brief lines={brief} />
         </p>
         <p className={`fresh ${ageH > 24 ? "stale" : ""}`}>
           <i />
@@ -210,6 +234,22 @@ export default function Today({ snap, settings, update, openSource, openCompany,
           ))}
         </div>
       </header>
+
+      <section>
+        <h2>Your holdings <small>last session</small></h2>
+        <ul className="tiles">
+          {tiles.map((t) => (
+            <li key={t.symbol}>
+              <button className={t.pct == null ? "" : t.pct >= 0 ? "up" : "down"} style={{ ["--heat" as string]: t.heat }} onClick={() => openCompany(t.symbol)}>
+                <span className="t-sym">{t.symbol}</span>
+                <span className="t-pct">{signed(t.pct)}</span>
+                <span className="t-flag">{t.unexplained ? "unexplained" : t.matters ? `${t.matters} to read` : t.moved ? "explained" : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="hint">Darker means a bigger move. Tap a holding for its ledger, numbers and filings.</p>
+      </section>
 
       {alerts.length > 0 && (
         <section className="alerts" aria-label="Alerts">

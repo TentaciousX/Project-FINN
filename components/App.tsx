@@ -97,6 +97,10 @@ export default function App({ snap }: { snap: Snapshot }) {
       {snap.sample && (
         <p className="banner">Sample data with invented companies. Run <code>npm run ingest</code> to load real filings.</p>
       )}
+      <header className="topbar">
+        <a href="/">FINN</a>
+        <span>{snap.portfolio.length} holdings</span>
+      </header>
       <main>
         {tab === "today" && (
           <Today snap={snap} settings={settings} update={update} openSource={setSource}
