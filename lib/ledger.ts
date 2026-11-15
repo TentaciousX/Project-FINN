@@ -1,7 +1,7 @@
 import { llmJson, type LlmOpts } from "./gemini";
 import { downloadPdf, isScanned, readPdf, toBase64 } from "./pdf";
 import { numbersBrief } from "./derive";
-import type { CallDigest, Concall, Fundamentals, Ledger, Promise_, PromiseStatus } from "./types";
+import type { CallDigest, CallLanguage, Concall, Fundamentals, GuidanceThread, Ledger, Promise_, PromiseStatus } from "./types";
 
 // The promise ledger.
 //   1. For each of the last few earnings calls, the cheap model pulls out what
@@ -57,6 +57,41 @@ export function prefilter(text: string): { sent: string; filtered: boolean } {
   const sent = out.join("\n\n");
   if (sent.length < 3000 || sent.length < text.length * 0.12) return { sent: text.slice(0, cap), filtered: false };
   return { sent: sent.slice(0, 70000), filtered: true };
+}
+
+const HEDGE = /\b(might|maybe|perhaps|hopefully|potentially|possibly|roughly|approximately|sort of|kind of|more or less|difficult to say|hard to say|we will see|let us see|let's see|cannot comment|can't comment|too early)\b/gi;
+const CERTAIN = /\b(will|clearly|definitely|certainly|absolutely|committed|confident|guarantee\w*|undoubtedly|surely)\b/gi;
+const SUPER = /\b(tremendous|fantastic|unprecedented|stellar|incredible|unbelievable|phenomenal|outstanding|extraordinary|remarkable|exceptional)\b/gi;
+const count = (t: string, re: RegExp) => (t.match(re) || []).length;
+
+// Plain word counts on management's own turns. Descriptive only: a higher hedge
+// share under questioning than in the script is a prompt to read the Q&A, not a verdict.
+export function languageStats(text: string): CallLanguage | undefined {
+  const re = /(?:^|\n)[ \t]*([A-Z][A-Za-z.'’\- ]{2,40}):[ \t]/g;
+  const marks: { at: number; who: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) marks.push({ at: m.index, who: m[1].trim().toLowerCase() });
+  if (marks.length < 12) return undefined;
+  const turns = marks.map((k, i) => ({ who: k.who, t: text.slice(k.at, marks[i + 1]?.at ?? text.length) }));
+  // Q&A starts at the first moderator turn that announces questions.
+  let qa = turns.findIndex((x, i) => i > 1 && /moderator|operator/.test(x.who) && /question/i.test(x.t));
+  if (qa < 0) qa = Math.min(turns.length - 1, Math.max(3, Math.round(turns.length * 0.2)));
+  // Management = whoever spoke at length before the Q&A began.
+  const mgmt = new Set(turns.slice(0, qa).filter((x) => !/moderator|operator/.test(x.who) && x.t.length > 400).map((x) => x.who));
+  if (!mgmt.size) return undefined;
+  const prepared = turns.slice(0, qa).filter((x) => mgmt.has(x.who)).map((x) => x.t).join(" ");
+  const answers = turns.slice(qa).filter((x) => mgmt.has(x.who)).map((x) => x.t).join(" ");
+  const ratio = (t: string) => {
+    const h = count(t, HEDGE), c = count(t, CERTAIN);
+    return h + c >= 8 ? Math.round((h / (h + c)) * 1000) / 10 : null;
+  };
+  const words = (prepared + " " + answers).split(/\s+/).length;
+  return {
+    hedgePrepared: ratio(prepared),
+    hedgeQA: ratio(answers),
+    superlativesPer1k: Math.round((count(prepared + " " + answers, SUPER) / Math.max(words, 1)) * 10000) / 10,
+    wordsQA: answers.split(/\s+/).length,
+  };
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -193,6 +228,7 @@ export async function extractCall(
       pressing: (out.pressing ?? []).slice(0, 3),
       charsRead: doc.text.length,
       charsSent,
+      language: scanned ? undefined : languageStats(doc.text),
       reported: (out.reported ?? [])
         .filter((r) => r.metric && r.value)
         .slice(0, 8)
@@ -213,7 +249,11 @@ Use only the NUMBERS and PROMISES given. Never use outside knowledge of the comp
 Be exact and unsentimental. Return JSON only.`;
 
 interface SynthOut {
-  grades?: { id: string; status?: string; actual?: string; verdict?: string; settled_in?: string | null; tracking?: string | null }[];
+  grades?: {
+    id: string; status?: string; actual?: string; verdict?: string; settled_in?: string | null; tracking?: string | null;
+    target_low?: number | null; target_high?: number | null; actual_value?: number | null; unit?: string | null;
+  }[];
+  threads?: { metric?: string; ids?: string[]; moved?: string; note?: string }[];
   delivered_summary?: string;
   divergences?: { story?: string; numbers?: string; read?: string }[];
   bull?: string[];
@@ -255,7 +295,18 @@ Return this JSON:
       "actual": "the reported figure(s) you compared against, with the period, e.g. 'Revenue YoY 11.2% in Sep 2026'",
       "verdict": "one sentence, 18 words or fewer",
       "settled_in": "the quarterly column label that settled it, e.g. 'Sep 2026', or null",
-      "tracking": "for pending promises only: ahead | in_line | behind, judged on the periods reported so far; null if nothing to judge by"
+      "tracking": "for pending promises only: ahead | in_line | behind, judged on the periods reported so far; null if nothing to judge by",
+      "target_low": number or null, "target_high": number or null,
+      "actual_value": number or null,
+      "unit": "% | bps | Rs crore | days | units | null"
+    }
+  ],
+  "threads": [
+    {
+      "metric": "plain label for the commitment, e.g. 'EBITDA margin' or 'FY27 revenue growth'",
+      "ids": ["promise ids for this same commitment, oldest call first"],
+      "moved": "lowered | raised | held",
+      "note": "22 words or fewer: how the number changed from call to call, and what was finally reported if known"
     }
   ],
   "delivered_summary": "40 words or fewer: across the last four quarters, what was promised versus what was delivered",
@@ -275,6 +326,8 @@ Grading rules:
 - A full-year or standing target (for example "18-20% margin for FY27") is judged on the full year or year to date, never on one quarter. If the year is still running it is pending: set tracking, and give the year-to-date figure in "actual".
 - A promise about a segment, volume or capacity can be settled by a figure in REPORTED BY MANAGEMENT for the due period; say "per management, <call> call" in "actual". Only use a figure that is for the same thing and the same period.
 - A promise made on a call cannot be settled by numbers for a period that ended before that call.
+- target_low, target_high, actual_value: plain numbers in the same unit, only when the promise is numeric and you used a specific reported figure. For a single target set both to it; for "above X" set only target_low; for "below X" set only target_high. Otherwise null.
+- threads: only for a commitment that management gave on two or more calls. "lowered" means a later call gave a weaker number for the same period or goal. Never group different metrics or different periods. An empty list is fine.
 - At most 4 divergences; include the ones that matter most.`;
 
   const out = await llmJson<SynthOut>("Grade promises", "strong", SYNTH_SYSTEM, [{ text: prompt }], {
@@ -287,7 +340,11 @@ Grading rules:
     if (!g) return p;
     const status = STATUSES.includes(g.status as PromiseStatus) ? (g.status as PromiseStatus) : "pending";
     const tracking = status === "pending" && ["ahead", "in_line", "behind"].includes(String(g.tracking)) ? (g.tracking as Promise_["tracking"]) : null;
-    return { ...p, status, actual: g.actual || null, verdict: g.verdict || null, settledIn: g.settled_in || null, tracking };
+    const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+    return {
+      ...p, status, actual: g.actual || null, verdict: g.verdict || null, settledIn: g.settled_in || null, tracking,
+      targetLow: num(g.target_low), targetHigh: num(g.target_high), actualValue: num(g.actual_value), unit: g.unit && g.unit !== "null" ? g.unit : null,
+    };
   });
   return {
     symbol: f.symbol,
@@ -303,6 +360,15 @@ Grading rules:
     bull: (out.bull ?? []).slice(0, 3),
     bear: (out.bear ?? []).slice(0, 3),
     business: out.business || "",
+    threads: (out.threads ?? [])
+      .map((t) => ({
+        metric: String(t.metric || "").trim(),
+        ids: (t.ids ?? []).filter((id) => promises.some((p) => p.id === id)),
+        moved: (["lowered", "raised", "held"].includes(String(t.moved)) ? t.moved : "held") as GuidanceThread["moved"],
+        note: String(t.note || "").trim(),
+      }))
+      .filter((t) => t.metric && t.ids.length >= 2)
+      .slice(0, 6),
   };
 }
 

@@ -1,9 +1,10 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Announcement, PeriodFigures, ResultsCard, Snapshot } from "../lib/types";
 import { CATEGORY_LABEL } from "../lib/classify";
 import { pct } from "../lib/derive";
-import { ago, effective, inr, moves, signed, stamp, tidy, WINDOWS, type Settings } from "../lib/client";
+import { ago, effective, inr, moves, scan, signed, stamp, tidy, WINDOWS, type Alert, type Settings } from "../lib/client";
+import Brief from "./Brief";
 import { Stamp, Swipe, type SourceInfo } from "./ui";
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   openSource: (s: SourceInfo) => void;
   openCompany: (symbol: string) => void;
   bury: (a: Announcement) => void;
+  alerts: Alert[];
+  ackAlerts: () => void;
 }
 
 const Delta = ({ v }: { v: number | null }) => (
@@ -86,7 +89,7 @@ function ResultsBlock({ r, onSource }: { r: ResultsCard; onSource: () => void })
 const dayLabel = (ms: number) =>
   new Date(ms).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 
-export default function Today({ snap, settings, update, openSource, openCompany, bury }: Props) {
+export default function Today({ snap, settings, update, openSource, openCompany, bury, alerts, ackAlerts }: Props) {
   const asOf = Date.parse(snap.generatedAt);
   const windowStart = asOf - settings.windowHours * 3600000;
   const [showBuried, setShowBuried] = useState(false);
@@ -144,26 +147,38 @@ export default function Today({ snap, settings, update, openSource, openCompany,
     };
   };
 
-  const speak = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const parts = [
-      `${total} filings in the last ${WINDOWS.find((w) => w.hours === settings.windowHours)?.label}. ${t1.length} matter.`,
-      ...t1.slice(0, 5).map(({ a }) => {
+  // Everything below counts filings, not cards: a card can carry folded companions.
+  const n = (list: { a: Announcement }[]) => list.reduce((k, x) => k + 1 + (x.a.related?.length ?? 0), 0);
+  const f1 = n(t1), f2 = n(t2), f3 = n(t3);
+  const sc = useMemo(() => scan(snap, settings, windowStart), [snap, settings, windowStart]);
+  // Age is worked out after load, so the server-rendered page and the browser agree.
+  const [ageH, setAgeH] = useState(0);
+  useEffect(() => setAgeH(Math.round((Date.now() - asOf) / 3600000)), [asOf]);
+
+  const brief = useMemo(() => {
+    const yoy = (c: number | null | undefined, y: number | null | undefined) => {
+      const v = pct(c ?? null, y ?? null);
+      return v == null ? "" : `${v >= 0 ? "up" : "down"} ${Math.abs(v).toFixed(0)} percent`;
+    };
+    const lines = [
+      `Good morning. Your brief for ${snap.portfolio.length} holdings, over the last ${WINDOWS.find((w) => w.hours === settings.windowHours)?.label}. ${total} filings came in. ${t1.length} ${t1.length === 1 ? "matters" : "matter"}.`,
+      ...sc.unexplained.slice(0, 3).map((m) => `${m.symbol} moved ${Math.abs(m.pct).toFixed(1)} percent ${m.pct >= 0 ? "up" : "down"} on ${m.volMult.toFixed(1)} times normal volume, and no filing explains it.`),
+      ...t1.slice(0, 6).map(({ a }) => {
         if (a.results) {
-          const y = pct(a.results.current.revenue, a.results.yearAgo?.revenue);
-          const p = pct(a.results.current.pat, a.results.yearAgo?.pat);
-          return `${a.company} results. Revenue ${y == null ? "" : `${y >= 0 ? "up" : "down"} ${Math.abs(y).toFixed(0)} percent`} year on year, profit ${p == null ? "" : `${p >= 0 ? "up" : "down"} ${Math.abs(p).toFixed(0)} percent`}.`;
+          const st = a.results.settles ?? [];
+          const kept = st.filter((x) => x.status === "kept").length, missed = st.filter((x) => x.status === "missed").length;
+          return `${a.company} reported. Revenue ${yoy(a.results.current.revenue, a.results.yearAgo?.revenue)} on last year, profit ${yoy(a.results.current.pat, a.results.yearAgo?.pat)}.` +
+            (st.length ? ` That settles ${st.length} earlier promises: ${kept} kept, ${missed} missed.` : "");
         }
         if (a.person) return `${a.company}. ${a.person.person} ${a.person.change} as ${a.person.role}.`;
-        return `${a.company}. ${a.summary || tidy(a.headline)}.`;
+        return `${a.company}. ${a.summary || tidy(a.headline)}`;
       }),
-      ...mv.filter((m) => !m.explainedBy).slice(0, 3).map((m) => `${m.symbol} moved ${Math.abs(m.pct).toFixed(1)} percent ${m.pct >= 0 ? "up" : "down"} with no filing to explain it.`),
     ];
-    const u = new SpeechSynthesisUtterance(parts.join(" "));
-    u.rate = 1.02;
-    window.speechSynthesis.speak(u);
-  };
+    const worst = [...snap.ledgerIndex].filter((r) => r.kept + r.missed + r.partial >= 3).sort((x, y) => x.kept / (x.kept + x.missed + x.partial) - y.kept / (y.kept + y.missed + y.partial))[0];
+    if (worst) lines.push(`On the promise ledger, ${worst.name} has kept ${worst.kept} of ${worst.kept + worst.missed + worst.partial} settled promises. Weigh its guidance accordingly.`);
+    lines.push(`${f3} filings were routine and are buried. That is the brief.`);
+    return lines;
+  }, [snap, settings.windowHours, total, t1, sc.unexplained, f3]);
 
   return (
     <div className="page">
@@ -175,13 +190,17 @@ export default function Today({ snap, settings, update, openSource, openCompany,
         </h1>
         <div className="range">
           <span>{dayLabel(windowStart)}</span>
-          <i><b style={{ width: `${total ? Math.max(4, Math.round(((t1.length + t2.length) / total) * 100)) : 0}%` }} /></i>
+          <i><b style={{ width: `${total ? Math.max(4, Math.round(((f1 + f2) / total) * 100)) : 0}%` }} /></i>
           <span>{dayLabel(asOf)}</span>
         </div>
         <p className="asof">
-          {total ? `${total - t1.length - t2.length} of ${total} buried as routine. ` : ""}
-          {snap.portfolio.length} holdings, as of {stamp(snap.generatedAt)}.
-          <button className="link" onClick={speak}>Play as audio</button>
+          {total ? `${f1} filings behind those ${t1.length}, ${f2} worth a glance, ${f3} buried as routine. ` : ""}
+          <Brief lines={brief} />
+        </p>
+        <p className={`fresh ${ageH > 24 ? "stale" : ""}`}>
+          <i />
+          Snapshot of {snap.portfolio.length} holdings taken {stamp(snap.generatedAt)}
+          {ageH > 24 ? `, ${Math.round(ageH / 24)} day${ageH >= 48 ? "s" : ""} old. Re-run ingest for today's filings.` : ageH >= 1 ? `, ${ageH} h ago.` : "."} Research on other symbols is fetched live.
         </p>
         <div className="seg" role="group" aria-label="Time window">
           {WINDOWS.filter((w) => w.hours <= snap.days * 24).map((w) => (
@@ -191,6 +210,26 @@ export default function Today({ snap, settings, update, openSource, openCompany,
           ))}
         </div>
       </header>
+
+      {alerts.length > 0 && (
+        <section className="alerts" aria-label="Alerts">
+          <h2>
+            {alerts.length} alert{alerts.length > 1 ? "s" : ""} since you last looked
+            <button className="link" onClick={ackAlerts}>Mark read</button>
+          </h2>
+          {alerts.slice(0, 4).map((al) => (
+            <article key={al.id} className="alert">
+              <h3>{al.title}</h3>
+              <p className="why-care"><span>Why it matters</span>{al.why}</p>
+              <ul>{al.evidence.map((e) => <li key={e}>{e}</li>)}</ul>
+              <div>
+                {al.ann && <button className="btn ghost" onClick={() => openSource(detail(al.ann!, effective(al.ann!, settings).why))}>Open the filing</button>}
+                <button className="btn ghost" onClick={() => openCompany(al.symbol)}>Open {al.symbol} ledger</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
 
       {mv.length > 0 && (
         <section>
@@ -209,6 +248,17 @@ export default function Today({ snap, settings, update, openSource, openCompany,
                 </button>
               </li>
             ))}
+          </ul>
+        </section>
+      )}
+
+      {(sc.explained.length + sc.unexplained.length + sc.quiet.length > 0) && (
+        <section>
+          <h2>Price against filings</h2>
+          <ul className="facts">
+            <li><b>{sc.explained.length}</b> unusual move{sc.explained.length === 1 ? "" : "s"} explained by a filing.</li>
+            <li className={sc.unexplained.length ? "bad" : ""}><b>{sc.unexplained.length}</b> with no filing behind {sc.unexplained.length === 1 ? "it" : "them"}{sc.unexplained.length ? `: ${[...new Set(sc.unexplained.map((m) => m.symbol))].join(", ")}.` : "."}</li>
+            <li><b>{sc.quiet.length}</b> material filing{sc.quiet.length === 1 ? "" : "s"} the price ignored (under 1% on the next session){sc.quiet.length ? `: ${[...new Set(sc.quiet.map((q) => q.a.symbol))].slice(0, 6).join(", ")}.` : "."} Either already priced in, or less material than ranked.</li>
           </ul>
         </section>
       )}

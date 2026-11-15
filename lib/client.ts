@@ -44,7 +44,6 @@ export interface Move {
   explainedBy: Announcement | null;
 }
 
-const DAY = 86400000;
 
 export function moves(snap: Snapshot, s: Settings, windowStart: number): Move[] {
   const out: Move[] = [];
@@ -54,6 +53,9 @@ export function moves(snap: Snapshot, s: Settings, windowStart: number): Move[] 
       const close = Date.parse(p.dates[i] + "T15:30:00+05:30");
       // Always judge the latest session; older ones only if inside the window.
       if (i < n - 1 && close < windowStart) break;
+      // Never judge a session older than the filings we hold: with no filings to
+      // check against, "unexplained" would mean nothing.
+      if (close < Date.parse(snap.generatedAt) - snap.days * 86400000) break;
       const pct = (p.close[i] / p.close[i - 1] - 1) * 100;
       let avg = 0;
       for (let j = i - 20; j < i; j++) avg += p.volume[j];
@@ -62,8 +64,11 @@ export function moves(snap: Snapshot, s: Settings, windowStart: number): Move[] 
       const priceHit = Math.abs(pct) >= s.pricePct;
       const volHit = volMult >= s.volMult;
       if (!priceHit && !volHit) continue;
-      const from = close - DAY - 6 * 3600000; // from the previous session's morning
-      const to = close + 18 * 3600000; // to the next morning's open
+      // Anything filed after the previous session closed could only be priced today,
+      // however many days ago that was (weekends, holidays). Filings a few hours
+      // after today's close count too: results often reach the exchange late.
+      const from = Date.parse(p.dates[i - 1] + "T15:30:00+05:30");
+      const to = close + 5 * 3600000;
       const explainedBy =
         snap.announcements
           .filter((a) => a.symbol === symbol && effective(a, s).tier <= 2)
@@ -109,4 +114,88 @@ export function tidy(h: string): string {
   let t = h.replace(/\s+/g, " ").replace(/^(announcement under regulation 30( \(lodr\)| of sebi \(?lodr\)?)?|disclosure under regulation 30)[\s\-:]*/i, "").trim();
   if (t === t.toUpperCase() && t.length > 8) t = t.charAt(0) + t.slice(1).toLowerCase();
   return t.length > 110 ? t.slice(0, 107) + "…" : t;
+}
+
+// ---------- Price reaction, coincidence scan and alerts ----------
+
+// Index of the first trading session that could react to something filed at `ts`.
+export function reactionIndex(dates: string[], ts: string): number {
+  const t = Date.parse(ts);
+  for (let i = 0; i < dates.length; i++) {
+    if (Date.parse(dates[i] + "T15:30:00+05:30") >= t) return i;
+  }
+  return -1;
+}
+
+export interface Scan {
+  explained: Move[];
+  unexplained: Move[];
+  quiet: { a: Announcement; pct: number }[]; // material filing, no price reaction
+}
+
+export function scan(snap: Snapshot, s: Settings, windowStart: number): Scan {
+  const mv = moves(snap, s, windowStart);
+  const quiet: Scan["quiet"] = [];
+  for (const a of snap.announcements) {
+    if (Date.parse(a.ts) < windowStart || effective(a, s).tier !== 1) continue;
+    const p = snap.prices[a.symbol];
+    if (!p) continue;
+    const i = reactionIndex(p.dates, a.ts);
+    if (i < 1) continue;
+    const pct = (p.close[i] / p.close[i - 1] - 1) * 100;
+    if (Math.abs(pct) < 1) quiet.push({ a, pct });
+  }
+  return { explained: mv.filter((m) => m.explainedBy), unexplained: mv.filter((m) => !m.explainedBy), quiet };
+}
+
+export interface Alert {
+  id: string;
+  symbol: string;
+  title: string;
+  why: string;
+  evidence: string[];
+  ts: number;
+  ann?: Announcement;
+}
+
+export function buildAlerts(snap: Snapshot, s: Settings, since: number): Alert[] {
+  const out: Alert[] = [];
+  const asOf = Date.parse(snap.generatedAt);
+  for (const m of moves(snap, s, asOf - 36 * 3600000)) {
+    const ts = Date.parse(m.date + "T15:30:00+05:30");
+    if (m.explainedBy || ts <= since) continue;
+    out.push({
+      id: `move-${m.symbol}-${m.date}`,
+      symbol: m.symbol,
+      title: `${m.symbol} ${signed(m.pct)} on ${m.volMult.toFixed(1)}× volume`,
+      why: `Beyond your thresholds, and nothing ranked material was filed between the previous close and that evening. A move with nothing filed is the kind worth a call.`,
+      evidence: [
+        `Price and volume: Yahoo Finance end of day, ${m.date}; volume against its 20-day average`,
+        `Filings checked: BSE corporate announcements for ${m.symbol}, none above routine`,
+      ],
+      ts,
+    });
+  }
+  for (const a of snap.announcements) {
+    const ts = Date.parse(a.ts);
+    if (ts <= since || effective(a, s).tier !== 1) continue;
+    let why = effective(a, s).why;
+    if (a.results) {
+      const y = a.results.yearAgo, c = a.results.current;
+      const g = (n: number | null, d: number | null | undefined) => (n == null || !d ? null : ((n - d) / Math.abs(d)) * 100);
+      why = `Revenue ${signed(g(c.revenue, y?.revenue))} and profit ${signed(g(c.pat, y?.pat))} against last year.` +
+        (a.results.settles?.length ? ` This quarter settled ${a.results.settles.length} earlier promise${a.results.settles.length > 1 ? "s" : ""}.` : "");
+    } else if (a.person) why = `${a.person.person} ${a.person.change} as ${a.person.role}.`;
+    else if (a.summary) why = `${a.summary} ${why}.`;
+    out.push({
+      id: `ann-${a.id}`,
+      symbol: a.symbol,
+      title: `${a.company}: ${a.results ? "results" : a.person ? "management change" : tidy(a.headline).slice(0, 60)}`,
+      why,
+      evidence: [`Filed ${stamp(a.ts)} on ${a.source}`, a.classifiedBy === "rule" ? "Ranked by a fixed rule" : "Ranked by the low-cost model"],
+      ts,
+      ann: a,
+    });
+  }
+  return out.sort((a, b) => b.ts - a.ts);
 }

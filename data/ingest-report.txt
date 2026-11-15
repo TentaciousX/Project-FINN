@@ -1,4 +1,4 @@
-FINN ingest 2026-11-15T06:56:05.161Z with Gemini
+FINN ingest 2026-11-15T08:49:30.723Z with Gemini
 models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
 
 [1/5] fundamentals from screener.in
@@ -22,6 +22,9 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
   DEEPAKNTR: 13 quarters, 24 transcripts, BSE 506401
   KAYNES: 13 quarters, 17 transcripts, BSE 543664
   KPITTECH: 13 quarters, 20 transcripts, BSE 542651
+  TATAELXSI: 13 quarters, 33 transcripts, BSE 500408
+  CDSL: 13 quarters, 23 transcripts, BSE null
+  ETERNAL: 13 quarters, 20 transcripts, BSE 543320
 
 [2/5] end-of-day prices from Yahoo Finance
   RELIANCE: 127 bars to 2026-11-13
@@ -54,7 +57,7 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
   MARUTI: 15 filings
   SUNPHARMA: 13 filings
   TITAN: 20 filings
-  BAJFINANCE: 20 filings
+  BAJFINANCE: fetch failed (fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after h); using 20 filings saved earlier
   ASIANPAINT: 13 filings
   TRENT: 14 filings
   DIXON: 12 filings
@@ -73,7 +76,7 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
     Feb 2026: 2 promises (2 quotes verified)
     Nov 2025: 3 promises (3 quotes verified)
     Aug 2025: 3 promises (3 quotes verified)
-    graded: 7 kept, 0 missed, 0 partial, 7 pending, 2 unverifiable
+    graded: 6 kept, 1 missed, 0 partial, 7 pending, 2 unverifiable
   building ledger for DIXON (37 transcripts listed)
     Nov 2026: 5 promises (5 quotes verified)
     Aug 2026: 2 promises (2 quotes verified)
@@ -81,7 +84,7 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
     Feb 2026: 4 promises (4 quotes verified)
     Oct 2025: 5 promises (5 quotes verified)
     Jul 2025: 2 promises (2 quotes verified)
-    graded: 1 kept, 0 missed, 0 partial, 11 pending, 9 unverifiable
+    graded: 2 kept, 0 missed, 0 partial, 17 pending, 2 unverifiable
   building ledger for PERSISTENT (34 transcripts listed)
     Oct 2026: 1 promises (1 quotes verified)
     Aug 2026: 2 promises (2 quotes verified)
@@ -89,7 +92,7 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
     Jan 2026: 2 promises (2 quotes verified)
     Oct 2025: 2 promises (2 quotes verified)
     Jul 2025: skipped, fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/stockinfo/AnnPdfOpen.aspx?Pname=35397e08-8726-451b-aa02-a838a82bd | HTTP 404 for https://www.bseindia.com/xml-data/corpfiling/AttachLive/35397e08-8726-451b-aa02-a838a82bd45e.pdf | fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/xml-data/corpfiling/AttachHis/35397e08-8726-451b-aa02-a838a82bd45
-    graded: 2 kept, 1 missed, 1 partial, 4 pending, 1 unverifiable
+    graded: 2 kept, 0 missed, 1 partial, 5 pending, 1 unverifiable
   building ledger for KAYNES (17 transcripts listed)
     Aug 2026: 5 promises (5 quotes verified)
     May 2026: 5 promises (5 quotes verified)
@@ -97,7 +100,7 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
     Dec 2025: 2 promises (2 quotes verified)
     Nov 2025: 4 promises (4 quotes verified)
     Aug 2025: 4 promises (4 quotes verified)
-    graded: 0 kept, 7 missed, 0 partial, 7 pending, 9 unverifiable
+    graded: 0 kept, 8 missed, 0 partial, 8 pending, 7 unverifiable
   building ledger for KPITTECH (20 transcripts listed)
     Nov 2026: 0 promises (0 quotes verified)
     Aug 2026: 1 promises (1 quotes verified)
@@ -106,7 +109,31 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
     Nov 2025: 3 promises (3 quotes verified)
     Aug 2025: 2 promises (2 quotes verified)
     graded: 4 kept, 2 missed, 0 partial, 4 pending, 1 unverifiable
-  ledgers available: ASIANPAINT, DIXON, PERSISTENT, KAYNES, KPITTECH
+  building ledger for TATAELXSI (33 transcripts listed)
+    Oct 2026: 2 promises (2 quotes verified)
+    Jul 2026: 0 promises (0 quotes verified)
+    Apr 2026: 1 promises (1 quotes verified)
+    Jan 2026: 2 promises (2 quotes verified)
+    Oct 2025: 3 promises (3 quotes verified)
+    Jul 2025: skipped, fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/stockinfo/AnnPdfOpen.aspx?Pname=cb73cece-f44a-4dba-a33e-148184e21 | fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/xml-data/corpfiling/AttachLive/cb73cece-f44a-4dba-a33e-148184e21f | fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/xml-data/corpfiling/AttachHis/cb73cece-f44a-4dba-a33e-148184e21f0
+    graded: 0 kept, 0 missed, 0 partial, 7 pending, 1 unverifiable
+  building ledger for CDSL (23 transcripts listed)
+    Nov 2026: 0 promises (0 quotes verified)
+    Aug 2026: 0 promises (0 quotes verified)
+    May 2026: 0 promises (0 quotes verified)
+    Feb 2026: 0 promises (0 quotes verified)
+    Nov 2025: 0 promises (0 quotes verified)
+    Aug 2025: 0 promises (0 quotes verified)
+    graded: 0 kept, 0 missed, 0 partial, 0 pending, 0 unverifiable
+  building ledger for ETERNAL (20 transcripts listed)
+    Oct 2026: 1 promises (1 quotes verified)
+    Jul 2026: 1 promises (1 quotes verified)
+    May 2026: 2 promises (2 quotes verified)
+    Jan 2026: 2 promises (2 quotes verified)
+    Oct 2025: 3 promises (3 quotes verified)
+    Jul 2025: 1 promises (1 quotes verified)
+    graded: 1 kept, 0 missed, 0 partial, 7 pending, 2 unverifiable
+  ledgers available: ASIANPAINT, DIXON, PERSISTENT, KAYNES, KPITTECH, TATAELXSI, CDSL, ETERNAL
 
 [5/5] enrichment
   triage: 55 of 55 filings read in 2 call(s)
@@ -139,5 +166,5 @@ models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
   person TRENT: Harish Bhat, Non-Executive Non-Independent Director (resigned)
 
 DONE. 239 filings -> 27 matter, 30 worth a glance, 146 buried (after folding related filings).
-prices 18/18, fundamentals 20/20, ledgers 5.
-model calls this run: 110 logged in total, 21 served from cache.
+prices 18/18, fundamentals 23/23, ledgers 8.
+model calls this run: 135 logged in total, 60 served from cache.

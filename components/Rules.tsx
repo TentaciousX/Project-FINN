@@ -2,13 +2,15 @@
 import type { Snapshot, UsageRow } from "../lib/types";
 import { ALL_CATEGORIES, CATEGORY_LABEL } from "../lib/classify";
 import { LIST_PRICE, USD_INR } from "../lib/gemini";
-import { stamp, type Pref, type Settings } from "../lib/client";
+import { useEffect, useState } from "react";
+import { buildAlerts, stamp, type Alert, type Pref, type Settings } from "../lib/client";
 
 interface Props {
   snap: Snapshot;
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   liveUsage: UsageRow[];
+  alerts: Alert[];
 }
 
 function costInr(r: UsageRow) {
@@ -16,7 +18,19 @@ function costInr(r: UsageRow) {
   return ((r.inTok * p.in + r.outTok * p.out) / 1e6) * USD_INR;
 }
 
-export default function Rules({ snap, settings, update, liveUsage }: Props) {
+export default function Rules({ snap, settings, update, liveUsage, alerts }: Props) {
+  const [perm, setPerm] = useState<string>("unknown");
+  useEffect(() => setPerm(typeof Notification === "undefined" ? "unsupported" : Notification.permission), []);
+  const ask = async () => {
+    if (typeof Notification === "undefined") return;
+    setPerm(await Notification.requestPermission());
+  };
+  // Replays the most recent real alert so the delivery path can be seen working.
+  const test = () => {
+    const a = alerts[0] ?? buildAlerts(snap, settings, 0)[0];
+    if (!a || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    new Notification(`FINN test: ${a.title}`, { body: a.why.slice(0, 180) });
+  };
   const usage = [...snap.usage, ...liveUsage];
   const steps = new Map<string, { calls: number; inTok: number; outTok: number; inr: number; route: string }>();
   let total = 0, naive = 0, sentWithNaive = 0;
@@ -57,6 +71,17 @@ export default function Rules({ snap, settings, update, liveUsage }: Props) {
           <label htmlFor="vm">Flag volume above <b>{settings.volMult}×</b> its 20-day average</label>
           <input id="vm" type="range" min={1.25} max={5} step={0.25} value={settings.volMult} onChange={(e) => update({ volMult: Number(e.target.value) })} />
         </div>
+      </section>
+
+      <section>
+        <h2>Alerts on this device</h2>
+        <p className="hint">
+          FINN raises an alert for a move beyond your thresholds with no filing behind it, and for any filing ranked as mattering.
+          {perm === "granted" ? " Notifications are on." : perm === "denied" ? " Notifications are blocked in this browser's settings." : perm === "unsupported" ? " This browser cannot show notifications; alerts appear at the top of Today." : ""}
+        </p>
+        {perm !== "granted" && perm !== "unsupported" && perm !== "denied" && <button className="btn" onClick={ask}>Turn on notifications</button>}
+        {perm === "granted" && <button className="btn ghost" onClick={test}>Send a test alert</button>}
+        <p className="hint" style={{ marginTop: 10 }}>The test replays the latest real alert. Alerts are raised when a new snapshot loads; a scheduled refresh is the next step.</p>
       </section>
 
       <section>

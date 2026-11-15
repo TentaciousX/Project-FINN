@@ -126,7 +126,7 @@ function cluster(items: Announcement[]): Announcement[] {
 }
 
 async function main() {
-  const cfg = readJson<{ portfolio: { symbol: string; sector: string }[]; research: string[] }>(path.join(ROOT, "config", "portfolio.json"));
+  const cfg = readJson<{ portfolio: { symbol: string; sector: string }[]; research: string[]; portfolioLedgers?: string[] }>(path.join(ROOT, "config", "portfolio.json"));
   if (!cfg) throw new Error("config/portfolio.json is missing");
   log(`FINN ingest ${new Date().toISOString()} ${KEY ? "with Gemini" : "WITHOUT Gemini (no key or --no-llm)"}`);
 
@@ -139,7 +139,7 @@ async function main() {
   if (ONLY_LEDGER) {
     const snapFile = path.join(DATA, "snapshot.json");
     const snap = readJson<Snapshot>(snapFile);
-    for (const s of symbolsArg.length ? symbolsArg : cfg.research) {
+    for (const s of symbolsArg.length ? symbolsArg : [...cfg.research, ...(cfg.portfolioLedgers ?? [])]) {
       const f = await fundamentalsFor(s);
       if (!f) continue;
       fs.rmSync(path.join(PUB, "ledger", `${s}.json`), { force: true });
@@ -224,7 +224,7 @@ async function main() {
   // 4. Promise ledgers for the research set
   log("\n[4/5] promise ledgers");
   const ledgers: Record<string, Ledger> = {};
-  const wantLedger = flag("ledger-all") ? all : cfg.research;
+  const wantLedger = flag("ledger-all") ? all : [...cfg.research, ...(cfg.portfolioLedgers ?? [])];
   for (const s of all) {
     if (!funds[s]) continue;
     const l = wantLedger.includes(s) ? await ledgerFor(funds[s]) : readJson<Ledger>(path.join(PUB, "ledger", `${s}.json`));

@@ -111,6 +111,27 @@ export interface Promise_ {
   verdict: string | null;
   settledIn: string | null;
   tracking?: "ahead" | "in_line" | "behind" | null; // for open promises
+  // Numbers behind the verdict, so the gap can be recomputed in code and shown.
+  targetLow?: number | null;
+  targetHigh?: number | null;
+  actualValue?: number | null;
+  unit?: string | null;
+}
+
+// The same commitment restated across calls, and whether the number moved.
+export interface GuidanceThread {
+  metric: string;
+  ids: string[]; // promise ids, oldest call first
+  moved: "lowered" | "raised" | "held";
+  note: string;
+}
+
+// Word-count measures of how management spoke, prepared remarks versus Q&A.
+export interface CallLanguage {
+  hedgePrepared: number | null; // hedge words / (hedge + certainty words)
+  hedgeQA: number | null;
+  superlativesPer1k: number;
+  wordsQA: number;
 }
 
 export interface CallDigest {
@@ -124,6 +145,7 @@ export interface CallDigest {
   // Operating figures management stated on the call that never appear in a P&L
   // (segment revenue, volumes, capacity). Used to settle promises about them.
   reported?: { metric: string; value: string; period: string; quote: string; verified: boolean }[];
+  language?: CallLanguage;
 }
 
 export interface Ledger {
@@ -137,6 +159,7 @@ export interface Ledger {
   bull: string[];
   bear: string[];
   business: string;
+  threads?: GuidanceThread[];
 }
 
 export interface UsageRow {

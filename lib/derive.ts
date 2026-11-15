@@ -196,3 +196,169 @@ export function numbersBrief(f: Fundamentals): string {
   }
   return lines.join("\n");
 }
+
+// ---------- Forensic screens, computed from the reported tables, no model ----------
+
+export interface Check {
+  label: string;
+  pass: boolean | null;
+  detail: string;
+  proxy?: string; // set when the textbook input is not in the data and a stand-in was used
+}
+
+function yearPair(f: Fundamentals): { t: string; p: string } | null {
+  const years = f.cashflow.periods;
+  if (years.length < 2) return null;
+  return { t: years[years.length - 1], p: years[years.length - 2] };
+}
+
+function val(t: Table, period: string, ...labels: string[]): number | null {
+  const i = t.periods.indexOf(period);
+  if (i < 0) return null;
+  return row(t, ...labels)[i] ?? null;
+}
+
+const div = (a: number | null, b: number | null) => (a == null || b == null || b === 0 ? null : a / b);
+const cmp = (a: number | null, b: number | null, better: "up" | "down") =>
+  a == null || b == null ? null : better === "up" ? a > b : a < b;
+const f2 = (v: number | null, d = 1) => (v == null ? "n/a" : v.toFixed(d));
+
+export interface Piotroski {
+  score: number;
+  outOf: number;
+  year: string;
+  checks: Check[];
+}
+
+// Piotroski F-Score: nine yes/no tests of profitability, leverage and efficiency.
+// Two inputs (current ratio, gross margin) are not in the standardised tables, so
+// labelled stand-ins are used. Not meaningful for lenders.
+export function piotroski(f: Fundamentals): Piotroski | null {
+  if (f.isLender) return null;
+  const y = yearPair(f);
+  if (!y) return null;
+  const pl = fiscalOnly(f.annual), bs = f.balance, cf = f.cashflow;
+  const ni = (p: string) => val(pl, p, "Net Profit");
+  const ta = (p: string) => val(bs, p, "Total Assets");
+  const sales = (p: string) => val(pl, p, "Sales", "Revenue");
+  const roa = (p: string) => div(ni(p), ta(p));
+  const cfo = val(cf, y.t, "Cash from Operating Activity");
+  const lev = (p: string) => div(val(bs, p, "Borrowings", "Borrowing"), ta(p));
+  const liq = (p: string) => div(val(bs, p, "Other Assets"), val(bs, p, "Other Liabilities"));
+  const opm = (p: string) => val(pl, p, "OPM %");
+  const turn = (p: string) => div(sales(p), ta(p));
+  const pctTxt = (v: number | null) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
+  const checks: Check[] = [
+    { label: "Profitable", pass: ni(y.t) == null ? null : (ni(y.t) as number) > 0, detail: `Return on assets ${pctTxt(roa(y.t))}` },
+    { label: "Operating cash positive", pass: cfo == null ? null : cfo > 0, detail: `Cash from operations Rs ${f2(cfo, 0)} crore` },
+    { label: "Return on assets improved", pass: cmp(roa(y.t), roa(y.p), "up"), detail: `${pctTxt(roa(y.p))} to ${pctTxt(roa(y.t))}` },
+    { label: "Cash earnings exceed profit", pass: cmp(cfo, ni(y.t), "up"), detail: `Cash Rs ${f2(cfo, 0)} crore against profit Rs ${f2(ni(y.t), 0)} crore` },
+    { label: "Leverage fell", pass: cmp(lev(y.t), lev(y.p), "down"), detail: `Borrowings to assets ${pctTxt(lev(y.p))} to ${pctTxt(lev(y.t))}` },
+    { label: "Liquidity improved", pass: cmp(liq(y.t), liq(y.p), "up"), detail: `${f2(liq(y.p), 2)} to ${f2(liq(y.t), 2)}`, proxy: "Other assets over other liabilities stands in for the current ratio" },
+    { label: "No new shares issued", pass: cmp(val(bs, y.t, "Equity Capital"), (val(bs, y.p, "Equity Capital") ?? 0) + 0.5, "down"), detail: `Equity capital Rs ${f2(val(bs, y.p, "Equity Capital"), 0)} to ${f2(val(bs, y.t, "Equity Capital"), 0)} crore` },
+    { label: "Margin improved", pass: cmp(opm(y.t), opm(y.p), "up"), detail: `${f2(opm(y.p))}% to ${f2(opm(y.t))}%`, proxy: "Operating margin stands in for gross margin" },
+    { label: "Asset turnover improved", pass: cmp(turn(y.t), turn(y.p), "up"), detail: `${f2(turn(y.p), 2)}× to ${f2(turn(y.t), 2)}×` },
+  ];
+  const known = checks.filter((c) => c.pass != null);
+  if (known.length < 6) return null;
+  return { score: known.filter((c) => c.pass).length, outOf: known.length, year: y.t, checks };
+}
+
+export interface Beneish {
+  m: number;
+  zone: "high" | "grey" | "low";
+  year: string;
+  parts: { key: string; label: string; value: number; reads: string }[];
+  approximations: string[];
+}
+
+// Beneish M-Score, eight-variable form. Above -1.78 is the usual flag for possible
+// earnings manipulation. Two of the eight inputs are approximated; see `approximations`.
+export function beneish(f: Fundamentals): Beneish | null {
+  if (f.isLender) return null;
+  const y = yearPair(f);
+  if (!y) return null;
+  const pl = fiscalOnly(f.annual), bs = f.balance, cf = f.cashflow, rt = f.ratiosTable;
+  const ta = (p: string) => val(bs, p, "Total Assets");
+  const sales = (p: string) => val(pl, p, "Sales", "Revenue");
+  const dd = (p: string) => val(rt, p, "Debtor Days");
+  const opm = (p: string) => val(pl, p, "OPM %");
+  const aq = (p: string) => {
+    const hard = (val(bs, p, "Other Assets") ?? 0) + (val(bs, p, "Fixed Assets") ?? 0);
+    const t = ta(p);
+    return t ? 1 - hard / t : null;
+  };
+  const depRate = (p: string) => {
+    const d = val(pl, p, "Depreciation"), fa = val(bs, p, "Fixed Assets");
+    return d == null || fa == null || d + fa === 0 ? null : d / (d + fa);
+  };
+  const lev = (p: string) => {
+    const t = ta(p);
+    return t ? ((val(bs, p, "Borrowings", "Borrowing") ?? 0) + (val(bs, p, "Other Liabilities") ?? 0)) / t : null;
+  };
+  const dsri = div(dd(y.t), dd(y.p));
+  const gmi = div(opm(y.p), opm(y.t));
+  const aqiRaw = div(aq(y.t), aq(y.p));
+  const aqi = aqiRaw == null || aqiRaw < 0 || aqiRaw > 5 ? 1 : aqiRaw;
+  const sgi = div(sales(y.t), sales(y.p));
+  const depi = div(depRate(y.p), depRate(y.t));
+  const lvgi = div(lev(y.t), lev(y.p));
+  const ni = val(pl, y.t, "Net Profit"), cfo = val(cf, y.t, "Cash from Operating Activity");
+  const tata = ni == null || cfo == null || !ta(y.t) ? null : (ni - cfo) / (ta(y.t) as number);
+  if ([dsri, gmi, sgi, depi, lvgi, tata].some((v) => v == null)) return null;
+  const sgai = 1;
+  const m = -4.84 + 0.92 * dsri! + 0.528 * gmi! + 0.404 * aqi + 0.892 * sgi! + 0.115 * depi! - 0.172 * sgai + 4.679 * tata! - 0.327 * lvgi!;
+  return {
+    m: Math.round(m * 100) / 100,
+    zone: m > -1.78 ? "high" : m > -2.22 ? "grey" : "low",
+    year: y.t,
+    parts: [
+      { key: "DSRI", label: "Receivables against sales", value: dsri!, reads: dsri! > 1.1 ? "Receivables grew faster than sales" : "Receivables in step with sales" },
+      { key: "GMI", label: "Margin deterioration", value: gmi!, reads: gmi! > 1.05 ? "Margin fell" : "Margin held" },
+      { key: "AQI", label: "Asset quality", value: aqi, reads: aqi > 1.2 ? "More of the balance sheet is soft assets" : "No shift toward soft assets" },
+      { key: "SGI", label: "Sales growth", value: sgi!, reads: sgi! > 1.3 ? "Fast growth, which raises the pressure to keep it up" : "Ordinary growth" },
+      { key: "DEPI", label: "Depreciation rate", value: depi!, reads: depi! > 1.1 ? "Depreciation rate slowed" : "Depreciation rate steady" },
+      { key: "LVGI", label: "Leverage", value: lvgi!, reads: lvgi! > 1.05 ? "Liabilities rose against assets" : "Leverage steady or lower" },
+      { key: "TATA", label: "Accruals to assets", value: tata!, reads: tata! > 0.05 ? "Profit well ahead of cash" : "Profit backed by cash" },
+    ],
+    approximations: [
+      "Gross margin is not in the standardised tables, so operating margin is used for the margin index.",
+      "Selling and admin costs are not broken out, so that index is held at neutral (1.0).",
+      "Receivables are taken from debtor days; soft assets are capital work in progress plus investments.",
+    ],
+  };
+}
+
+// ---------- The arithmetic behind a promise verdict ----------
+
+export function gap(low: number | null | undefined, high: number | null | undefined, actual: number | null | undefined, unit: string | null | undefined): string | null {
+  if (actual == null || (low == null && high == null)) return null;
+  const u = (unit || "").trim();
+  const isRate = u === "%" || u === "bps";
+  const show = (v: number) => `${v.toLocaleString("en-IN", { maximumFractionDigits: 1 })}${u === "%" ? "%" : u ? ` ${u}` : ""}`;
+  const lo = low ?? -Infinity, hi = high ?? Infinity;
+  const target = low != null && high != null && low !== high ? `${show(low)} to ${show(high)}` : low != null && high == null ? `at least ${show(low)}` : high != null && low == null ? `at most ${show(high)}` : show((low ?? high) as number);
+  if (actual >= lo && actual <= hi) return `Target ${target}; reported ${show(actual)}. Inside the target.`;
+  const bound = actual < lo ? lo : hi;
+  const diff = actual - bound;
+  const how = isRate
+    ? `${Math.abs(u === "bps" ? diff : diff * 100).toFixed(0)} bps`
+    : `${Math.abs((diff / Math.abs(bound)) * 100).toFixed(1)}%`;
+  return `Target ${target}; reported ${show(actual)}. ${actual < lo ? "Short" : "Over"} by ${how} (${show(actual)} − ${show(bound)}${isRate ? "" : `, divided by ${show(bound)}`}).`;
+}
+
+export const DIMENSIONS: { key: string; label: string; match: RegExp }[] = [
+  { key: "revenue", label: "Revenue and volumes", match: /revenue|volume|sales|growth/i },
+  { key: "margin", label: "Margins and profit", match: /margin|profit|pat|ebitda/i },
+  { key: "capex", label: "Capex and capacity", match: /capex|capacity/i },
+  { key: "cash", label: "Cash and balance sheet", match: /cash|working|debt/i },
+];
+
+export function dimensionOf(metric: string): string {
+  // Margin first: "margin growth" is a margin promise, not a revenue one.
+  for (const k of ["margin", "capex", "cash", "revenue"]) {
+    const d = DIMENSIONS.find((x) => x.key === k)!;
+    if (d.match.test(metric)) return d.label;
+  }
+  return "Other";
+}

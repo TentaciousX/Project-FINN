@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { CallDigest, Fundamentals, Ledger, Promise_, Snapshot, UsageRow } from "../lib/types";
-import { balanceView, cagr, cashQuality, fiscalOnly, last, marginRow, opRow, pct, revenueRow, row, yoySeries } from "../lib/derive";
-import { inr, signed } from "../lib/client";
+import { balanceView, beneish, cagr, cashQuality, dimensionOf, DIMENSIONS, fiscalOnly, gap, last, marginRow, opRow, pct, piotroski, revenueRow, row, yoySeries } from "../lib/derive";
+import { effective, inr, moves, reactionIndex, signed, stamp, tidy, type Settings } from "../lib/client";
+import { CATEGORY_LABEL } from "../lib/classify";
 import { Bars, Spark, Stamp, type SourceInfo } from "./ui";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   setSymbol: (s: string | null) => void;
   openSource: (s: SourceInfo) => void;
   addUsage: (rows: UsageRow[]) => void;
+  settings: Settings;
 }
 
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -19,6 +21,14 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
   return j as T;
 }
+
+const RULE: Record<string, string> = {
+  kept: "Kept: the reported figure is at or inside the target for the period promised.",
+  missed: "Missed: the period has closed and the reported figure is outside the target.",
+  partial: "Partly: the direction was right but the figure fell short of the number given.",
+  pending: "Open: the period promised has not closed, or its numbers are not yet reported. Full-year targets are never judged on one quarter.",
+  unverifiable: "Can't check: the company does not report this figure, in its accounts or on later calls.",
+};
 
 function tally(l: Ledger) {
   const c = { kept: 0, missed: 0, partial: 0, pending: 0, unverifiable: 0 };
@@ -37,9 +47,9 @@ function ScoreBar({ c }: { c: { kept: number; missed: number; partial: number; p
   );
 }
 
-export default function LedgerTab({ snap, symbol, setSymbol, openSource, addUsage }: Props) {
+export default function LedgerTab({ snap, symbol, setSymbol, openSource, addUsage, settings }: Props) {
   const [query, setQuery] = useState("");
-  if (symbol) return <Company key={symbol} snap={snap} symbol={symbol} back={() => setSymbol(null)} openSource={openSource} addUsage={addUsage} />;
+  if (symbol) return <Company key={symbol} snap={snap} symbol={symbol} back={() => setSymbol(null)} openSource={openSource} addUsage={addUsage} settings={settings} />;
 
   const indexed = new Set(snap.ledgerIndex.map((r) => r.symbol));
   const others = snap.portfolio.filter((p) => !indexed.has(p.symbol));
@@ -99,7 +109,45 @@ export default function LedgerTab({ snap, symbol, setSymbol, openSource, addUsag
   );
 }
 
-function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot; symbol: string; back: () => void; openSource: (s: SourceInfo) => void; addUsage: (r: UsageRow[]) => void }) {
+interface Ev {
+  key: string;
+  kind: "matter" | "glance" | "move";
+  i: number;
+  date: string;
+  label: string;
+  move: number | null;
+  info: SourceInfo;
+}
+
+function Timeline({ dates, close, events, onPick }: { dates: string[]; close: number[]; events: Ev[]; onPick: (e: Ev) => void }) {
+  const W = 340, H = 120, n = close.length;
+  const min = Math.min(...close), max = Math.max(...close), span = max - min || 1;
+  const x = (i: number) => (i / (n - 1)) * (W - 8) + 4;
+  const y = (v: number) => H - 14 - ((v - min) / span) * (H - 28);
+  const d = close.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return (
+    <figure className="timeline">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Closing price with filings marked">
+        <path d={d} fill="none" />
+        {events.filter((e) => e.i >= 0 && e.i < n).map((e) => (
+          <g key={e.key} className={`ev ${e.kind}`} onClick={() => onPick(e)} tabIndex={0} role="button" aria-label={e.label}
+            onKeyDown={(k) => k.key === "Enter" && onPick(e)}>
+            <line x1={x(e.i)} x2={x(e.i)} y1={y(close[e.i])} y2={H - 6} />
+            <circle cx={x(e.i)} cy={y(close[e.i])} r="5" />
+            <circle cx={x(e.i)} cy={y(close[e.i])} r="13" className="hit" />
+          </g>
+        ))}
+      </svg>
+      <figcaption>
+        <span>{dates[0]}</span>
+        <span>₹{inr(min)} to ₹{inr(max)}</span>
+        <span>{dates[n - 1]}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap: Snapshot; symbol: string; back: () => void; openSource: (s: SourceInfo) => void; addUsage: (r: UsageRow[]) => void; settings: Settings }) {
   const [f, setF] = useState<Fundamentals | null>(null);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -218,6 +266,54 @@ function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot;
   const bv = balanceView(f);
   const price = snap.prices[symbol];
   const c = ledger ? tally(ledger) : null;
+  const pio = piotroski(f), ben = beneish(f);
+  const inPortfolio = snap.portfolio.some((x) => x.symbol === symbol);
+  const mine = snap.announcements.filter((a) => a.symbol === symbol);
+
+  const dims = !ledger ? [] : [...DIMENSIONS.map((d) => d.label), "Other"]
+    .map((label) => {
+      const ps = ledger.promises.filter((p) => dimensionOf(p.metric) === label);
+      const kept = ps.filter((p) => p.status === "kept").length, missed = ps.filter((p) => p.status === "missed").length, partial = ps.filter((p) => p.status === "partial").length;
+      return { label, kept, missed, partial, settled: kept + missed + partial };
+    })
+    .filter((d) => d.settled > 0);
+
+  const people = mine.filter((a) => a.category === "management_change");
+  const gov = [
+    { label: "Promoter pledge or encumbrance", n: mine.filter((a) => a.category === "pledging").length, bad: true, note: "" },
+    { label: "Auditor change", n: mine.filter((a) => /auditor/i.test(a.headline + a.body)).length, bad: true, note: "" },
+    { label: "Board and senior management changes", n: people.length, bad: people.length >= 3, note: people.map((a) => a.person?.person).filter(Boolean).slice(0, 3).join(", ") },
+    { label: "Insider or promoter share dealing", n: mine.filter((a) => a.category === "insider_trading").length, bad: false, note: "" },
+    { label: "Legal or regulatory action", n: mine.filter((a) => a.category === "litigation").length, bad: true, note: "" },
+    { label: "Related-party transactions", n: mine.filter((a) => /related party|regulation 23|section 188/i.test(a.headline + a.body)).length, bad: false, note: "" },
+  ];
+
+  const events: Ev[] = [];
+  if (price) {
+    for (const a of mine) {
+      if (effective(a, settings).tier > 2) continue;
+      const i = reactionIndex(price.dates, a.ts);
+      events.push({
+        key: a.id, kind: a.tier === 1 ? "matter" : "glance", i,
+        date: stamp(a.ts), label: a.results ? "Results filed" : a.person ? `${a.person.person} ${a.person.change}` : a.summary || tidy(a.headline),
+        move: i >= 1 ? (price.close[i] / price.close[i - 1] - 1) * 100 : null,
+        info: {
+          title: tidy(a.headline), quote: a.summary || a.body.slice(0, 280) || undefined,
+          lines: [{ k: "Filed", v: `${stamp(a.ts)} on ${a.source}` }, { k: "Type", v: CATEGORY_LABEL[a.category] }, { k: "Why it ranks here", v: effective(a, settings).why }],
+          links: a.url ? [{ label: "Open the filing", href: a.url }] : [],
+        },
+      });
+    }
+    for (const m of moves({ ...snap, prices: { [symbol]: price } }, settings, 0)) {
+      if (m.explainedBy) continue;
+      const i = price.dates.indexOf(m.date);
+      events.push({
+        key: `mv-${m.date}`, kind: "move", i, date: m.date, label: `Unusual move, no filing behind it`, move: m.pct,
+        info: { title: `${symbol} ${signed(m.pct)} on ${m.volMult.toFixed(1)}× volume`, lines: [{ k: "Session", v: m.date }, { k: "Filings checked", v: "None above routine between the previous close and that evening" }] },
+      });
+    }
+    events.sort((x, y) => x.i - y.i);
+  }
   // Promises the reported numbers cannot settle are kept, but out of the way.
   const byCall = ledger
     ? ledger.calls.map((cl) => ({ cl, ps: ledger.promises.filter((p) => p.callPeriod === cl.period && p.status !== "unverifiable") }))
@@ -246,7 +342,9 @@ function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot;
       ...(p.target ? [{ k: "Target", v: p.target }] : []),
       ...(p.horizon ? [{ k: "Due", v: p.horizon }] : []),
       ...(p.actual ? [{ k: "Reported", v: p.actual }] : []),
+      ...(gap(p.targetLow, p.targetHigh, p.actualValue, p.unit) ? [{ k: "The arithmetic, done in code", v: gap(p.targetLow, p.targetHigh, p.actualValue, p.unit)! }] : []),
       ...(p.verdict ? [{ k: "Verdict", v: p.verdict }] : []),
+      { k: "Grading rule", v: RULE[p.status] },
       ...(p.status === "pending" && p.tracking ? [{ k: "So far", v: TRACK[p.tracking] }] : []),
     ],
     links: p.callUrl ? [{ label: "Open the transcript", href: p.callUrl }] : [],
@@ -319,6 +417,86 @@ function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot;
         )}
       </section>
 
+      {ledger && dims.length > 0 && (
+        <section>
+          <h2>Where their word holds</h2>
+          <ul className="dims">
+            {dims.map((d) => (
+              <li key={d.label}>
+                <span className="env-top">
+                  <span>{d.label}</span>
+                  <span className="capv">{d.kept} of {d.settled} kept</span>
+                </span>
+                <div className="scorebar" aria-hidden="true">
+                  {d.kept > 0 && <i className="sb-kept" style={{ width: `${(d.kept / d.settled) * 100}%` }} />}
+                  {d.partial > 0 && <i className="sb-partial" style={{ width: `${(d.partial / d.settled) * 100}%` }} />}
+                  {d.missed > 0 && <i className="sb-missed" style={{ width: `${(d.missed / d.settled) * 100}%` }} />}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="hint">Settled promises only. Guidance on the weaker lines deserves a discount when you model it.</p>
+        </section>
+      )}
+
+      {ledger && (ledger.threads?.length ?? 0) > 0 && (
+        <section>
+          <h2>Guidance that was restated</h2>
+          {ledger.threads!.map((t, i) => (
+            <div className={`thread ${t.moved}`} key={i}>
+              <h3>
+                {t.metric}
+                <span className={`stamp ${t.moved === "lowered" ? "s-missed" : t.moved === "raised" ? "s-kept" : "s-pending"}`}>
+                  {t.moved === "lowered" ? "Walked down" : t.moved === "raised" ? "Raised" : "Held"}
+                </span>
+              </h3>
+              <ol>
+                {t.ids.map((id) => {
+                  const p = ledger.promises.find((x) => x.id === id);
+                  return p ? (
+                    <li key={id}>
+                      <button onClick={() => openSource(promiseSource(p))}>
+                        <span>{p.callPeriod} call</span>
+                        {p.target || p.statement}
+                      </button>
+                    </li>
+                  ) : null;
+                })}
+              </ol>
+              {t.note && <p className="summary">{t.note}</p>}
+            </div>
+          ))}
+          <p className="hint">The same commitment tracked from call to call, so a target met only after being lowered is visible.</p>
+        </section>
+      )}
+
+      {ledger && ledger.calls.some((c) => c.language) && (
+        <section>
+          <h2>How they spoke under questioning</h2>
+          <table className="fin cost">
+            <thead><tr><th>Call</th><th>Script</th><th>Q&amp;A</th><th>Shift</th></tr></thead>
+            <tbody>
+              {ledger.calls.filter((c) => c.language).map((c) => {
+                const l = c.language!;
+                const shift = l.hedgePrepared != null && l.hedgeQA != null ? l.hedgeQA - l.hedgePrepared : null;
+                return (
+                  <tr key={c.period}>
+                    <th scope="row">{c.period}</th>
+                    <td>{l.hedgePrepared == null ? "n/a" : `${l.hedgePrepared.toFixed(0)}%`}</td>
+                    <td>{l.hedgeQA == null ? "n/a" : `${l.hedgeQA.toFixed(0)}%`}</td>
+                    <td className={`delta ${shift != null && shift > 10 ? "down" : ""}`}>{shift == null ? "n/a" : `${shift > 0 ? "+" : "−"}${Math.abs(shift).toFixed(0)} pts`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="hint">
+            Share of hedging words (might, hopefully, roughly) among hedging plus certainty words (will, definitely, committed), in management&rsquo;s own turns.
+            A jump from script to Q&amp;A means they were less sure off-script. Counted in code; it is a prompt to read that Q&amp;A, not a finding about anyone&rsquo;s honesty.
+          </p>
+        </section>
+      )}
+
       {ledger && ledger.divergences.length > 0 && (
         <section>
           <h2>Story versus numbers</h2>
@@ -354,6 +532,24 @@ function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot;
           </tbody>
         </table>
       </section>
+
+      {price && (
+        <section>
+          <h2>Price and what was filed</h2>
+          <Timeline dates={price.dates} close={price.close} events={events} onPick={(e) => openSource(e.info)} />
+          <ul className="rows">
+            {events.slice(-5).reverse().map((e) => (
+              <li key={e.key}>
+                <button className="row" onClick={() => openSource(e.info)}>
+                  <span className="row-main"><span className={`dot ${e.kind}`} />{e.label}</span>
+                  <span className="row-meta">{e.date}, {e.move == null ? "no session yet" : `${signed(e.move)} that session`}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {events.length === 0 && <p className="hint">Nothing above routine was filed in the period on the chart.</p>}
+        </section>
+      )}
 
       <section>
         <h2>Trajectory</h2>
@@ -403,6 +599,63 @@ function Company({ snap, symbol, back, openSource, addUsage }: { snap: Snapshot;
             {bv.cycle && <div><dt>{bv.cycle.label}</dt><dd>{last(bv.cycle.days) == null ? "n/a" : `${last(bv.cycle.days)} days`}</dd></div>}
             {bv.cycle && bv.cycle.days.length > 3 && <div><dt>Three years earlier</dt><dd>{bv.cycle.days[bv.cycle.days.length - 4] ?? "n/a"} days</dd></div>}
           </dl>
+        </section>
+      )}
+
+      {(pio || ben) && (
+        <section>
+          <h2>Forensic checks</h2>
+          {pio && (
+            <>
+              <p className="summary">
+                <b className="capv">Piotroski {pio.score} of {pio.outOf}</b>, year to {pio.year}.{" "}
+                {pio.score >= 7 ? "Strong on most tests." : pio.score <= 3 ? "Weak on most tests." : "Mixed."}
+              </p>
+              <ul className="checks">
+                {pio.checks.map((c) => (
+                  <li key={c.label} className={c.pass == null ? "na" : c.pass ? "yes" : "no"}>
+                    <span>{c.label}{c.proxy ? " *" : ""}</span>
+                    <span>{c.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {ben && (
+            <>
+              <p className="summary">
+                <b className="capv">Beneish M-Score {ben.m.toFixed(2)}</b>.{" "}
+                {ben.zone === "high" ? "Above −1.78, the usual line for a closer look at earnings quality." : ben.zone === "grey" ? "Between −2.22 and −1.78: not flagged, not clear." : "Below −2.22: nothing flagged."}
+              </p>
+              <ul className="checks">
+                {ben.parts.map((x) => (
+                  <li key={x.key} className="na">
+                    <span>{x.label}</span>
+                    <span>{x.value.toFixed(2)}, {x.reads.toLowerCase()}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="hint">
+            Computed in code from the reported tables, no model. * marks a stand-in: the standardised tables carry no current ratio or gross margin
+            {ben ? ", and the M-Score's selling-cost index is held neutral, so treat it as approximate" : ""}. A screen, not a verdict.
+          </p>
+        </section>
+      )}
+
+      {inPortfolio && (
+        <section>
+          <h2>Governance signals</h2>
+          <ul className="checks">
+            {gov.map((g) => (
+              <li key={g.label} className={g.n === 0 ? "yes" : g.bad ? "no" : "na"}>
+                <span>{g.label}</span>
+                <span>{g.n === 0 ? "None filed" : `${g.n} filed${g.note ? `: ${g.note}` : ""}`}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="hint">From this company&rsquo;s exchange filings over the last {snap.days} days only. A longer history needs a longer ingest window.</p>
         </section>
       )}
 

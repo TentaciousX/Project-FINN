@@ -1,23 +1,88 @@
 {
   "portfolio": [
-    { "symbol": "RELIANCE", "sector": "Energy and retail" },
-    { "symbol": "HDFCBANK", "sector": "Bank" },
-    { "symbol": "TCS", "sector": "IT services" },
-    { "symbol": "BHARTIARTL", "sector": "Telecom" },
-    { "symbol": "LT", "sector": "Engineering" },
-    { "symbol": "ITC", "sector": "Consumer staples" },
-    { "symbol": "MARUTI", "sector": "Autos" },
-    { "symbol": "SUNPHARMA", "sector": "Pharma" },
-    { "symbol": "TITAN", "sector": "Jewellery and watches" },
-    { "symbol": "BAJFINANCE", "sector": "Consumer lender" },
-    { "symbol": "ASIANPAINT", "sector": "Paints" },
-    { "symbol": "TRENT", "sector": "Fashion retail" },
-    { "symbol": "DIXON", "sector": "Electronics manufacturing" },
-    { "symbol": "POLYCAB", "sector": "Cables and wires" },
-    { "symbol": "PERSISTENT", "sector": "IT services, mid cap" },
-    { "symbol": "INDIGO", "sector": "Airline" },
-    { "symbol": "APOLLOHOSP", "sector": "Hospitals" },
-    { "symbol": "DEEPAKNTR", "sector": "Chemicals" }
+    {
+      "symbol": "RELIANCE",
+      "sector": "Energy and retail"
+    },
+    {
+      "symbol": "HDFCBANK",
+      "sector": "Bank"
+    },
+    {
+      "symbol": "TCS",
+      "sector": "IT services"
+    },
+    {
+      "symbol": "BHARTIARTL",
+      "sector": "Telecom"
+    },
+    {
+      "symbol": "LT",
+      "sector": "Engineering"
+    },
+    {
+      "symbol": "ITC",
+      "sector": "Consumer staples"
+    },
+    {
+      "symbol": "MARUTI",
+      "sector": "Autos"
+    },
+    {
+      "symbol": "SUNPHARMA",
+      "sector": "Pharma"
+    },
+    {
+      "symbol": "TITAN",
+      "sector": "Jewellery and watches"
+    },
+    {
+      "symbol": "BAJFINANCE",
+      "sector": "Consumer lender"
+    },
+    {
+      "symbol": "ASIANPAINT",
+      "sector": "Paints"
+    },
+    {
+      "symbol": "TRENT",
+      "sector": "Fashion retail"
+    },
+    {
+      "symbol": "DIXON",
+      "sector": "Electronics manufacturing"
+    },
+    {
+      "symbol": "POLYCAB",
+      "sector": "Cables and wires"
+    },
+    {
+      "symbol": "PERSISTENT",
+      "sector": "IT services, mid cap"
+    },
+    {
+      "symbol": "INDIGO",
+      "sector": "Airline"
+    },
+    {
+      "symbol": "APOLLOHOSP",
+      "sector": "Hospitals"
+    },
+    {
+      "symbol": "DEEPAKNTR",
+      "sector": "Chemicals"
+    }
   ],
-  "research": ["DIXON", "PERSISTENT", "ASIANPAINT", "KAYNES", "KPITTECH"]
+  "research": [
+    "KAYNES",
+    "KPITTECH",
+    "TATAELXSI",
+    "CDSL",
+    "ETERNAL"
+  ],
+  "portfolioLedgers": [
+    "DIXON",
+    "PERSISTENT",
+    "ASIANPAINT"
+  ]
 }

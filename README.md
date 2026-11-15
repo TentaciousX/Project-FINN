@@ -7,6 +7,8 @@ A mobile-first investment agent for a portfolio of NSE-listed companies. It does
 
 The two are joined: when a results filing lands, its card says which earlier promises that quarter settled.
 
+Also in the app, all computed in code with no model call: alerts with the reason they matter, a scan of price moves against filings, a price chart with filings marked, a 60-second audio brief, a per-topic view of where management's word holds, Piotroski and approximate Beneish screens, and a count of governance filings. The model additionally tracks a commitment restated across calls and whether its number was lowered.
+
 ## Run it
 
 Needs Node 20 or newer.

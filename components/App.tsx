@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Announcement, Snapshot, UsageRow } from "../lib/types";
-import { DEFAULTS, loadSettings, saveSettings, type Settings } from "../lib/client";
+import { buildAlerts, DEFAULTS, loadSettings, saveSettings, type Settings } from "../lib/client";
 import Today from "./Today";
 import LedgerTab from "./LedgerTab";
 import Rules from "./Rules";
@@ -66,6 +66,30 @@ export default function App({ snap }: { snap: Snapshot }) {
     [settings.dismissed, update]
   );
 
+  // Alerts are everything that crossed the bar since the investor last marked them read.
+  const [seen, setSeen] = useState<number | null>(null);
+  useEffect(() => {
+    const raw = Number(localStorage.getItem("finn.seen") || 0);
+    setSeen(raw || Date.parse(snap.generatedAt) - 72 * 3600000);
+  }, [snap.generatedAt]);
+  const alerts = useMemo(() => (seen == null ? [] : buildAlerts(snap, settings, seen)), [snap, settings, seen]);
+  const ackAlerts = useCallback(() => {
+    const t = Date.parse(snap.generatedAt);
+    try {
+      localStorage.setItem("finn.seen", String(t));
+    } catch {}
+    setSeen(t);
+  }, [snap.generatedAt]);
+  // If the investor allowed notifications, raise one per new snapshot.
+  useEffect(() => {
+    if (!alerts.length || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (localStorage.getItem("finn.notified") === snap.generatedAt) return;
+    try {
+      new Notification(`FINN: ${alerts.length} alert${alerts.length > 1 ? "s" : ""}`, { body: `${alerts[0].title}. ${alerts[0].why}`.slice(0, 180) });
+      localStorage.setItem("finn.notified", snap.generatedAt);
+    } catch {}
+  }, [alerts, snap.generatedAt]);
+
   const addUsage = useCallback((rows: UsageRow[]) => setLiveUsage((u) => [...u, ...rows]), []);
 
   return (
@@ -76,12 +100,12 @@ export default function App({ snap }: { snap: Snapshot }) {
       <main>
         {tab === "today" && (
           <Today snap={snap} settings={settings} update={update} openSource={setSource}
-            openCompany={(s) => { setSource(null); go("ledger", s); }} bury={bury} />
+            openCompany={(s) => { setSource(null); go("ledger", s); }} bury={bury} alerts={alerts} ackAlerts={ackAlerts} />
         )}
         {tab === "ledger" && (
-          <LedgerTab snap={snap} symbol={symbol} setSymbol={(s) => go("ledger", s)} openSource={setSource} addUsage={addUsage} />
+          <LedgerTab snap={snap} symbol={symbol} setSymbol={(s) => go("ledger", s)} openSource={setSource} addUsage={addUsage} settings={settings} />
         )}
-        {tab === "rules" && <Rules snap={snap} settings={settings} update={update} liveUsage={liveUsage} />}
+        {tab === "rules" && <Rules snap={snap} settings={settings} update={update} liveUsage={liveUsage} alerts={alerts} />}
       </main>
 
       {toast && (
