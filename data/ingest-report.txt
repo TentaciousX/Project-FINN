@@ -1,0 +1,143 @@
+FINN ingest 2026-11-15T06:56:05.161Z with Gemini
+models: cheap=gemini-flash-lite-latest strong=gemini-3.6-flash
+
+[1/5] fundamentals from screener.in
+  RELIANCE: 13 quarters, 17 transcripts, BSE 500325
+  HDFCBANK: 13 quarters, 19 transcripts, BSE 500180
+  TCS: 13 quarters, 40 transcripts, BSE 532540
+  BHARTIARTL: 13 quarters, 19 transcripts, BSE 532454
+  LT: 13 quarters, 28 transcripts, BSE 500510
+  ITC: 13 quarters, 0 transcripts, BSE 500875
+  MARUTI: 13 quarters, 39 transcripts, BSE 532500
+  SUNPHARMA: 13 quarters, 25 transcripts, BSE 524715
+  TITAN: 13 quarters, 35 transcripts, BSE 500114
+  BAJFINANCE: 13 quarters, 38 transcripts, BSE 500034
+  ASIANPAINT: 13 quarters, 33 transcripts, BSE 500820
+  TRENT: 13 quarters, 0 transcripts, BSE 500251
+  DIXON: 13 quarters, 37 transcripts, BSE 540699
+  POLYCAB: 13 quarters, 33 transcripts, BSE 542652
+  PERSISTENT: 13 quarters, 34 transcripts, BSE 533179
+  INDIGO: 13 quarters, 44 transcripts, BSE 539448
+  APOLLOHOSP: 13 quarters, 36 transcripts, BSE 508869
+  DEEPAKNTR: 13 quarters, 24 transcripts, BSE 506401
+  KAYNES: 13 quarters, 17 transcripts, BSE 543664
+  KPITTECH: 13 quarters, 20 transcripts, BSE 542651
+
+[2/5] end-of-day prices from Yahoo Finance
+  RELIANCE: 127 bars to 2026-11-13
+  HDFCBANK: 127 bars to 2026-11-13
+  TCS: 127 bars to 2026-11-13
+  BHARTIARTL: 127 bars to 2026-11-13
+  LT: 127 bars to 2026-11-13
+  ITC: 127 bars to 2026-11-13
+  MARUTI: 127 bars to 2026-11-13
+  SUNPHARMA: 127 bars to 2026-11-13
+  TITAN: 127 bars to 2026-11-13
+  BAJFINANCE: 127 bars to 2026-11-13
+  ASIANPAINT: 127 bars to 2026-11-13
+  TRENT: 127 bars to 2026-11-13
+  DIXON: 127 bars to 2026-11-13
+  POLYCAB: 127 bars to 2026-11-13
+  PERSISTENT: 127 bars to 2026-11-13
+  INDIGO: 127 bars to 2026-11-13
+  APOLLOHOSP: 127 bars to 2026-11-13
+  DEEPAKNTR: 127 bars to 2026-11-13
+
+[3/5] exchange filings, last 30 days
+  NSE unreachable (The operation was aborted due to timeout for https://www.nseindia.com/api/corporate-announcements?index=equities&symbol=RELIANCE&from_d); using BSE for all symbols
+  RELIANCE: 19 filings
+  HDFCBANK: 17 filings
+  TCS: 5 filings
+  BHARTIARTL: 24 filings
+  LT: 16 filings
+  ITC: 7 filings
+  MARUTI: 15 filings
+  SUNPHARMA: 13 filings
+  TITAN: 20 filings
+  BAJFINANCE: 20 filings
+  ASIANPAINT: 13 filings
+  TRENT: 14 filings
+  DIXON: 12 filings
+  POLYCAB: 10 filings
+  PERSISTENT: 15 filings
+  INDIGO: 9 filings
+  APOLLOHOSP: 8 filings
+  DEEPAKNTR: 5 filings
+  total 239; rules placed 214, unsure 25
+
+[4/5] promise ledgers
+  building ledger for ASIANPAINT (33 transcripts listed)
+    Nov 2026: 2 promises (2 quotes verified)
+    Aug 2026: 3 promises (3 quotes verified)
+    Jun 2026: 3 promises (3 quotes verified)
+    Feb 2026: 2 promises (2 quotes verified)
+    Nov 2025: 3 promises (3 quotes verified)
+    Aug 2025: 3 promises (3 quotes verified)
+    graded: 7 kept, 0 missed, 0 partial, 7 pending, 2 unverifiable
+  building ledger for DIXON (37 transcripts listed)
+    Nov 2026: 5 promises (5 quotes verified)
+    Aug 2026: 2 promises (2 quotes verified)
+    May 2026: 3 promises (3 quotes verified)
+    Feb 2026: 4 promises (4 quotes verified)
+    Oct 2025: 5 promises (5 quotes verified)
+    Jul 2025: 2 promises (2 quotes verified)
+    graded: 1 kept, 0 missed, 0 partial, 11 pending, 9 unverifiable
+  building ledger for PERSISTENT (34 transcripts listed)
+    Oct 2026: 1 promises (1 quotes verified)
+    Aug 2026: 2 promises (2 quotes verified)
+    Apr 2026: 2 promises (2 quotes verified)
+    Jan 2026: 2 promises (2 quotes verified)
+    Oct 2025: 2 promises (2 quotes verified)
+    Jul 2025: skipped, fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/stockinfo/AnnPdfOpen.aspx?Pname=35397e08-8726-451b-aa02-a838a82bd | HTTP 404 for https://www.bseindia.com/xml-data/corpfiling/AttachLive/35397e08-8726-451b-aa02-a838a82bd45e.pdf | fetch failed (Response does not match the HTTP/1.1 protocol (Unexpected whitespace after header value)) for https://www.bseindia.com/xml-data/corpfiling/AttachHis/35397e08-8726-451b-aa02-a838a82bd45
+    graded: 2 kept, 1 missed, 1 partial, 4 pending, 1 unverifiable
+  building ledger for KAYNES (17 transcripts listed)
+    Aug 2026: 5 promises (5 quotes verified)
+    May 2026: 5 promises (5 quotes verified)
+    Feb 2026: 3 promises (3 quotes verified)
+    Dec 2025: 2 promises (2 quotes verified)
+    Nov 2025: 4 promises (4 quotes verified)
+    Aug 2025: 4 promises (4 quotes verified)
+    graded: 0 kept, 7 missed, 0 partial, 7 pending, 9 unverifiable
+  building ledger for KPITTECH (20 transcripts listed)
+    Nov 2026: 0 promises (0 quotes verified)
+    Aug 2026: 1 promises (1 quotes verified)
+    May 2026: 2 promises (2 quotes verified)
+    Feb 2026: 3 promises (3 quotes verified)
+    Nov 2025: 3 promises (3 quotes verified)
+    Aug 2025: 2 promises (2 quotes verified)
+    graded: 4 kept, 2 missed, 0 partial, 4 pending, 1 unverifiable
+  ledgers available: ASIANPAINT, DIXON, PERSISTENT, KAYNES, KPITTECH
+
+[5/5] enrichment
+  triage: 55 of 55 filings read in 2 call(s)
+  results RELIANCE: read from filing (Consolidated, cross-check true)
+  results HDFCBANK: read from filing (Consolidated, cross-check true)
+  results BHARTIARTL: only the standalone statement could be read; using screener table
+  results LT: read from filing (Consolidated, cross-check true)
+  results ITC: read from filing (Consolidated, cross-check false)
+  results MARUTI: only the standalone statement could be read; using screener table
+  results SUNPHARMA: read from filing (Consolidated, cross-check true)
+  results TITAN: read from filing (Consolidated, cross-check true)
+  results BAJFINANCE: read from filing (Consolidated, cross-check true)
+  results ASIANPAINT: read from filing (Consolidated, cross-check true)
+  results TRENT: read from filing (Consolidated, cross-check true)
+  results DIXON: read from filing (Consolidated, cross-check true)
+  results INDIGO: read from filing (Consolidated, cross-check true)
+  results APOLLOHOSP: read from filing (Consolidated, cross-check true)
+  results DEEPAKNTR: read from filing (Consolidated, cross-check true)
+  person HDFCBANK: V. Srinivasa Rangan, Whole-time Director (designated as Executive Director) (reappointed)
+  person HDFCBANK: V. Srinivasa Rangan, Whole-time Director (designated as Executive Director) (reappointed)
+  person ASIANPAINT: Mr. Leo Puri, Independent Director and Chairman (appointed)
+  person TITAN: Noel N. Tata, Director and Vice-Chairman (retired)
+  person APOLLOHOSP: Dr. Madhu Sasidhar, President & CEO - Hospitals Division (ceased)
+  person HDFCBANK: Sanjay D’Souza, Group Head – Business Banking, Emerging & Micro Enterprises Group (ceased)
+  person DIXON: Mr. Prithvi Vachani, Executive Director (appointed)
+  person TRENT: Noel N. Tata, Chairman (retired)
+  person TRENT: Noel N. Tata, Chairman (retired)
+  person HDFCBANK: Anup Bagchi, Managing Director and Chief Executive Officer (appointed)
+  person BAJFINANCE: Prashant Verma, Chief Information Security Officer (reappointed)
+  person TRENT: Harish Bhat, Non-Executive Non-Independent Director (resigned)
+
+DONE. 239 filings -> 27 matter, 30 worth a glance, 146 buried (after folding related filings).
+prices 18/18, fundamentals 20/20, ledgers 5.
+model calls this run: 110 logged in total, 21 served from cache.

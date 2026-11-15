@@ -1,0 +1,11 @@
+node_modules
+.next
+.env
+.env.local
+data/raw
+probe-out
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+
+*.zip
