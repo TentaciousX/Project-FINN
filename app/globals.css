@@ -317,3 +317,55 @@ h2 small { font: 500 12.5px var(--sans); color: var(--muted); }
 .tiles .up .t-pct { color: var(--green); } .tiles .down .t-pct { color: var(--missed); }
 .t-flag { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; min-height: 13px; }
 .tiles button:active, .row:active, .card:active { opacity: 0.75; }
+
+/* ---- Sections as panels: each block of the page is its own surface ---- */
+.shell { background: #e8e2d3; }
+.page { padding: 0 12px 28px; }
+.lede { margin: 0 -12px; padding: 22px 20px 24px; }
+.back { width: calc(100% + 24px); margin: 0 -12px; padding: 14px 20px 0; }
+.page > section { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 18px 16px 10px; margin-top: 12px; scroll-margin-top: 58px; box-shadow: 0 1px 0 rgba(30, 42, 35, 0.03); }
+.page > section > h2 { font-size: 17px; padding-bottom: 12px; margin-bottom: 2px; }
+.page > section > h2 small { background: var(--paper); border: 1px solid var(--rule); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; color: var(--ink); }
+.page > section > .hint:last-child, .page > section > .summary:last-child { margin-bottom: 8px; }
+.row, .swipe-top { background: var(--card); }
+.rows > li:last-child, .moves li:last-child, .swipe:last-child, .promises li:last-child, .facts li:last-child, .links li:last-child, .checks li:last-child, .prefs li:last-child, .dims li:last-child { border-bottom: 0; }
+.tag, .buried-head, .tiles button:not(.up):not(.down) { background: var(--paper); }
+.settles { background: var(--green-soft); }
+.build { background: var(--paper); }
+
+/* Alerts stand apart from everything else */
+.page > section.alerts { background: #fbf1ea; border-color: #e7cdbf; }
+.page > section.alerts .alert { background: var(--card); }
+
+/* Buried section: quiet on purpose */
+.page > section.buried { background: transparent; border-style: dashed; box-shadow: none; }
+.page > section.buried > h2 { border-bottom: 0; padding-bottom: 6px; color: var(--muted); }
+.page > section.buried .row { background: transparent; }
+
+/* Anything tappable says so */
+.row { position: relative; padding-right: 22px; }
+.row::after { content: ""; position: absolute; right: 4px; top: 50%; width: 7px; height: 7px; border-right: 1.6px solid #a9a594; border-top: 1.6px solid #a9a594; transform: translateY(-50%) rotate(45deg); }
+.card { padding-right: 22px; }
+.card::after { content: ""; position: absolute; right: 4px; top: 24px; width: 7px; height: 7px; border-right: 1.6px solid #a9a594; border-top: 1.6px solid #a9a594; transform: rotate(45deg); }
+.card-top { padding-right: 4px; }
+.fin tbody tr th:first-child { text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 4px; }
+.fin.cost tbody tr th:first-child { text-decoration: none; }
+
+/* Jump chips */
+.jump { position: sticky; top: 0; z-index: 15; display: flex; gap: 6px; overflow-x: auto; margin: 0 -12px; padding: 10px 12px; background: #e8e2d3; border-bottom: 1px solid var(--rule); scrollbar-width: none; }
+.jump::-webkit-scrollbar { display: none; }
+.jump button { flex: none; font-size: 12.5px; font-weight: 500; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); color: var(--ink); white-space: nowrap; }
+.jump button[aria-current="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.page > section.buried .buried-head { grid-template-columns: 1fr auto; background: var(--card); }
+
+/* Today's three views */
+.jump.views { gap: 8px; }
+.jump.views button { flex: 1; text-align: center; padding: 9px 8px; font-size: 13.5px; }
+.jump.views b { font-weight: 600; margin-left: 4px; opacity: 0.7; }
+.row-sub { display: block; font-size: 14px; margin-top: 2px; }
+.page > section > .btn.full { margin: 10px 0 8px; }
+.lede .seg { margin-top: 16px; }
+
+button.alert { display: block; width: 100%; text-align: left; position: relative; padding-right: 30px; }
+button.alert::after { content: ""; position: absolute; right: 14px; top: 20px; width: 7px; height: 7px; border-right: 1.6px solid #b9917f; border-top: 1.6px solid #b9917f; transform: rotate(45deg); }

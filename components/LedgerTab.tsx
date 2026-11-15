@@ -5,6 +5,7 @@ import { balanceView, beneish, cagr, cashQuality, dimensionOf, DIMENSIONS, fisca
 import { effective, inr, moves, reactionIndex, signed, stamp, tidy, type Settings } from "../lib/client";
 import { CATEGORY_LABEL } from "../lib/classify";
 import { Bars, Spark, Stamp, type SourceInfo } from "./ui";
+import Jump from "./Jump";
 
 interface Props {
   snap: Snapshot;
@@ -369,8 +370,10 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
         </dl>
       </header>
 
+      <Jump dep={`${symbol}-${Boolean(ledger)}`} />
+
       <section>
-        <h2>Promised versus delivered</h2>
+        <h2 data-jump="Promises">Promised versus delivered</h2>
         {ledger && c ? (
           <>
             {c.kept + c.missed + c.partial > 0 ? (
@@ -430,7 +433,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {ledger && dims.length > 0 && (
         <section>
-          <h2>Where their word holds</h2>
+          <h2 data-jump="By topic">Where their word holds</h2>
           <ul className="dims">
             {dims.map((d) => (
               <li key={d.label}>
@@ -452,7 +455,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {ledger && (ledger.threads?.length ?? 0) > 0 && (
         <section>
-          <h2>Guidance that was restated</h2>
+          <h2 data-jump="Restated">Guidance that was restated</h2>
           {ledger.threads!.map((t, i) => (
             <div className={`thread ${t.moved}`} key={i}>
               <h3>
@@ -483,7 +486,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {ledger && ledger.calls.some((c) => c.language) && (
         <section>
-          <h2>How they spoke under questioning</h2>
+          <h2 data-jump="Language">How they spoke under questioning</h2>
           <table className="fin cost">
             <thead><tr><th>Call</th><th>Script</th><th>Q&amp;A</th><th>Shift</th></tr></thead>
             <tbody>
@@ -510,7 +513,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {ledger && ledger.divergences.length > 0 && (
         <section>
-          <h2>Story versus numbers</h2>
+          <h2 data-jump="Story vs numbers">Story versus numbers</h2>
           <ul className="diverge">
             {ledger.divergences.map((d, i) => (
               <li key={i} className={d.read}>
@@ -523,7 +526,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
       )}
 
       <section>
-        <h2>Latest quarter, {q.periods[n - 1]}</h2>
+        <h2 data-jump="Quarter">Latest quarter, {q.periods[n - 1]}</h2>
         <table className="fin">
           <thead><tr><th /><th>Rs crore</th><th>QoQ</th><th>YoY</th></tr></thead>
           <tbody>
@@ -546,7 +549,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {price && (
         <section>
-          <h2>Price and what was filed</h2>
+          <h2 data-jump="Chart">Price and what was filed</h2>
           <Timeline dates={price.dates} close={price.close} events={events} onPick={(e) => openSource(e.info)} />
           <ul className="rows">
             {events.slice(-5).reverse().map((e) => (
@@ -588,7 +591,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {cq && (
         <section>
-          <h2>Do profits turn into cash?</h2>
+          <h2 data-jump="Cash">Do profits turn into cash?</h2>
           <p className="summary">
             {cq.conversion == null ? "Not computable." : `Over the last ${cq.years.length} years, ₹${cq.conversion.toFixed(0)} of operating cash came in for every ₹100 of reported profit.`}
             {cq.conversion != null && cq.conversion < 70 ? " That is low; profit is running ahead of cash." : ""}
@@ -615,7 +618,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {(pio || ben) && (
         <section>
-          <h2>Forensic checks</h2>
+          <h2 data-jump="Forensics">Forensic checks</h2>
           {pio && (
             <>
               <p className="summary">
@@ -657,7 +660,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {inPortfolio && (
         <section>
-          <h2>Governance signals</h2>
+          <h2 data-jump="Governance">Governance signals</h2>
           <ul className="checks">
             {gov.map((g) => (
               <li key={g.label} className={g.n === 0 ? "yes" : g.bad ? "no" : "na"}>
@@ -672,7 +675,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
 
       {ledger && (ledger.bull.length > 0 || ledger.bear.length > 0) && (
         <section>
-          <h2>The case each way</h2>
+          <h2 data-jump="For and against">The case each way</h2>
           <div className="cases">
             <div className="bull"><h3>For</h3><ul>{ledger.bull.map((b, i) => <li key={i}>{b}</li>)}</ul></div>
             <div className="bear"><h3>Against</h3><ul>{ledger.bear.map((b, i) => <li key={i}>{b}</li>)}</ul></div>
@@ -681,7 +684,7 @@ function Company({ snap, symbol, back, openSource, addUsage, settings }: { snap:
       )}
 
       <section>
-        <h2>Primary sources used</h2>
+        <h2 data-jump="Sources">Primary sources used</h2>
         <ul className="links">
           <li><a href={f.url} target="_blank" rel="noreferrer">Standardised financials on screener.in</a></li>
           {f.concalls.filter((x) => x.transcriptUrl).slice(0, 5).map((x) => (

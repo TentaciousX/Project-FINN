@@ -54,7 +54,13 @@ export default function Landing() {
       <header className="lp-hero">
         <nav>
           <span className="lp-mark">FINN</span>
-          <a href="/app">Open the app</a>
+          <span className="lp-links">
+            <a href="#ledger">Ledger</a>
+            <a href="#filter">Filter</a>
+            <a href="#brief">Brief</a>
+            <a href="#try">Try it</a>
+          </span>
+          <a className="lp-open" href="/app">Open the app</a>
         </nav>
         <div className="lp-hero-grid">
           <div>
@@ -94,7 +100,8 @@ export default function Landing() {
       </header>
 
       {(s.missedPick || s.keptPick) && (
-        <section className="lp-sec">
+        <section className="lp-sec" id="ledger">
+          <p className="lp-eyebrow"><i>1</i>The promise ledger</p>
           <h2>They said it on the call. Then the numbers came in.</h2>
           <p className="lp-lead">
             FINN reads the last six earnings calls for a company and writes down what management promised. When the
@@ -111,7 +118,8 @@ export default function Landing() {
         </section>
       )}
 
-      <section className="lp-sec alt">
+      <section className="lp-sec alt" id="filter">
+        <p className="lp-eyebrow"><i>2</i>The filter</p>
         <h2>Most of what companies file is paperwork.</h2>
         <p className="lp-lead">
           Trading-window notices, newspaper copies, share allotments to staff, schedules of investor meetings. FINN keeps
@@ -129,7 +137,8 @@ export default function Landing() {
         </ul>
       </section>
 
-      <section className="lp-sec">
+      <section className="lp-sec" id="brief">
+        <p className="lp-eyebrow"><i>3</i>The morning brief</p>
         <h2>What reaches your phone</h2>
         <ul className="lp-rows">
           {result && (
@@ -156,13 +165,15 @@ export default function Landing() {
         </ul>
       </section>
 
-      <section className="lp-sec alt">
+      <section className="lp-sec dark" id="try">
+        <p className="lp-eyebrow"><i>4</i>Try it</p>
         <h2>Try it on a company you don&rsquo;t own</h2>
         <p className="lp-lead">Any NSE symbol. FINN reads six call transcripts while you watch, about a minute.</p>
         <SymbolBox examples={ready.length ? ready : snap.portfolio.slice(0, 3).map((p) => p.symbol)} />
       </section>
 
-      <section className="lp-sec">
+      <section className="lp-sec alt" id="trust">
+        <p className="lp-eyebrow"><i>5</i>How it stays honest</p>
         <h2>Why you can lean on it</h2>
         <ul className="lp-why">
           <li><b>Primary sources only.</b> Exchange filings, call transcripts and reported accounts. No broker notes, no news.</li>
@@ -175,7 +186,7 @@ export default function Landing() {
             Building this whole brief took {s.calls} model calls, about ₹{s.costInr < 10 ? s.costInr.toFixed(2) : s.costInr.toFixed(0)} at list price.
           </p>
         )}
-        <a className="lp-cta dark" href="/app">Open today&rsquo;s brief</a>
+        <div><a className="lp-cta dark" href="/app">Open today&rsquo;s brief</a></div>
       </section>
 
       <footer className="lp-foot">

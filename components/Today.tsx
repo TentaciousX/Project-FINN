@@ -4,7 +4,6 @@ import type { Announcement, PeriodFigures, ResultsCard, Snapshot } from "../lib/
 import { CATEGORY_LABEL } from "../lib/classify";
 import { pct } from "../lib/derive";
 import { ago, effective, inr, moves, scan, signed, stamp, tidy, WINDOWS, type Alert, type Settings } from "../lib/client";
-import Brief from "./Brief";
 import { Stamp, Swipe, type SourceInfo } from "./ui";
 
 interface Props {
@@ -175,30 +174,66 @@ export default function Today({ snap, settings, update, openSource, openCompany,
   const [ageH, setAgeH] = useState(0);
   useEffect(() => setAgeH(Math.round((Date.now() - asOf) / 3600000)), [asOf]);
 
-  const brief = useMemo(() => {
-    const yoy = (c: number | null | undefined, y: number | null | undefined) => {
-      const v = pct(c ?? null, y ?? null);
-      return v == null ? "" : `${v >= 0 ? "up" : "down"} ${Math.abs(v).toFixed(0)} percent`;
-    };
-    const lines = [
-      `Good morning. Your brief for ${snap.portfolio.length} holdings, over the last ${WINDOWS.find((w) => w.hours === settings.windowHours)?.label}. ${total} filings came in. ${t1.length} ${t1.length === 1 ? "matters" : "matter"}.`,
-      ...sc.unexplained.slice(0, 3).map((m) => `${m.symbol} moved ${Math.abs(m.pct).toFixed(1)} percent ${m.pct >= 0 ? "up" : "down"} on ${m.volMult.toFixed(1)} times normal volume, and no filing explains it.`),
-      ...t1.slice(0, 6).map(({ a }) => {
-        if (a.results) {
-          const st = a.results.settles ?? [];
-          const kept = st.filter((x) => x.status === "kept").length, missed = st.filter((x) => x.status === "missed").length;
-          return `${a.company} reported. Revenue ${yoy(a.results.current.revenue, a.results.yearAgo?.revenue)} on last year, profit ${yoy(a.results.current.pat, a.results.yearAgo?.pat)}.` +
-            (st.length ? ` That settles ${st.length} earlier promises: ${kept} kept, ${missed} missed.` : "");
-        }
-        if (a.person) return `${a.company}. ${a.person.person} ${a.person.change} as ${a.person.role}.`;
-        return `${a.company}. ${a.summary || tidy(a.headline)}`;
-      }),
-    ];
-    const worst = [...snap.ledgerIndex].filter((r) => r.kept + r.missed + r.partial >= 3).sort((x, y) => x.kept / (x.kept + x.missed + x.partial) - y.kept / (y.kept + y.missed + y.partial))[0];
-    if (worst) lines.push(`On the promise ledger, ${worst.name} has kept ${worst.kept} of ${worst.kept + worst.missed + worst.partial} settled promises. Weigh its guidance accordingly.`);
-    lines.push(`${f3} filings were routine and are buried. That is the brief.`);
-    return lines;
-  }, [snap, settings.windowHours, total, t1, sc.unexplained, f3]);
+  const [view, setView] = useState<"overview" | "filings" | "moves">("overview");
+  const [moreMatters, setMoreMatters] = useState(false);
+  const [moreGlance, setMoreGlance] = useState(false);
+  const go = (v: typeof view) => {
+    setView(v);
+    window.scrollTo({ top: 0 });
+  };
+
+  // One line that says what a filing is about, for the short lists.
+  const oneLine = (a: Announcement) => {
+    if (a.results) {
+      const r = a.results;
+      return `Revenue ${signed(pct(r.current.revenue, r.yearAgo?.revenue ?? null))} on last year, profit ${signed(pct(r.current.pat, r.yearAgo?.pat ?? null))}`;
+    }
+    if (a.person) return `${a.person.person} ${a.person.change} as ${a.person.role}`;
+    return a.summary || tidy(a.headline);
+  };
+
+  const card = ({ a, e }: { a: Announcement; e: { why: string } }) => (
+    <Swipe key={a.id} onBury={() => bury(a)}>
+      <article className="card" onClick={() => openSource(detail(a, e.why))} tabIndex={0} role="button"
+        onKeyDown={(ev) => ev.key === "Enter" && openSource(detail(a, e.why))}>
+        <div className="card-top">
+          <span className="co">{a.company}</span>
+          <span className="when">{ago(a.ts, asOf)}</span>
+        </div>
+        <p className="tag">{CATEGORY_LABEL[a.category]}</p>
+        {a.results ? (
+          <ResultsBlock r={a.results} onSource={() => openSource(resultsSource(a))} />
+        ) : a.person ? (
+          <div className="person">
+            <h3>{a.person.person}</h3>
+            <p className="role">
+              {a.person.change.charAt(0).toUpperCase() + a.person.change.slice(1)} as {a.person.role}
+              {a.person.effective ? `, effective ${a.person.effective}` : ""}
+            </p>
+            {a.person.bio && <p className="bio">{a.person.bio}</p>}
+            {a.person.reason && <p className="bio">Reason given: {a.person.reason}</p>}
+            {a.person.previous.length > 0 && <p className="prev">Earlier at {a.person.previous.join(", ")}</p>}
+            <a className="src" href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(a.person.person + " " + a.company)}`}
+              target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>
+              Profile taken from the filing. Look them up on LinkedIn
+            </a>
+          </div>
+        ) : (
+          <>
+            <h3>{a.summary || tidy(a.headline)}</h3>
+            {a.summary && <p className="sub">{tidy(a.headline)}</p>}
+          </>
+        )}
+        <p className="why">{e.why}{a.related?.length ? `. ${a.related.length} related filing${a.related.length > 1 ? "s" : ""} folded in` : ""}</p>
+      </article>
+    </Swipe>
+  );
+
+  // The overview never shows the same filing twice: what is in the alert strip is left out of the list.
+  const alerted = new Set(alerts.slice(0, 2).map((al) => al.ann?.id));
+  const topList = t1.filter((x) => !alerted.has(x.a.id)).slice(0, 4);
+  const shownMatters = moreMatters ? t1 : t1.slice(0, 5);
+  const shownGlance = moreGlance ? t2 : t2.slice(0, 6);
 
   return (
     <div className="page">
@@ -218,13 +253,10 @@ export default function Today({ snap, settings, update, openSource, openCompany,
           <li><b className="b">{f2}</b>worth a glance</li>
           <li><b className="c">{f3}</b>buried</li>
         </ul>
-        <p className="asof">
-          {dayLabel(windowStart)} to {dayLabel(asOf)}. <Brief lines={brief} />
-        </p>
         <p className={`fresh ${ageH > 24 ? "stale" : ""}`}>
           <i />
-          Snapshot of {snap.portfolio.length} holdings taken {stamp(snap.generatedAt)}
-          {ageH > 24 ? `, ${Math.round(ageH / 24)} day${ageH >= 48 ? "s" : ""} old. Re-run ingest for today's filings.` : ageH >= 1 ? `, ${ageH} h ago.` : "."} Research on other symbols is fetched live.
+          {dayLabel(windowStart)} to {dayLabel(asOf)}. Snapshot taken {stamp(snap.generatedAt)}
+          {ageH > 24 ? `, ${Math.round(ageH / 24)} day${ageH >= 48 ? "s" : ""} old. Re-run ingest for today's filings.` : ageH >= 1 ? `, ${ageH} h ago.` : "."}
         </p>
         <div className="seg" role="group" aria-label="Time window">
           {WINDOWS.filter((w) => w.hours <= snap.days * 24).map((w) => (
@@ -235,164 +267,176 @@ export default function Today({ snap, settings, update, openSource, openCompany,
         </div>
       </header>
 
-      <section>
-        <h2>Your holdings <small>last session</small></h2>
-        <ul className="tiles">
-          {tiles.map((t) => (
-            <li key={t.symbol}>
-              <button className={t.pct == null ? "" : t.pct >= 0 ? "up" : "down"} style={{ ["--heat" as string]: t.heat }} onClick={() => openCompany(t.symbol)}>
-                <span className="t-sym">{t.symbol}</span>
-                <span className="t-pct">{signed(t.pct)}</span>
-                <span className="t-flag">{t.unexplained ? "unexplained" : t.matters ? `${t.matters} to read` : t.moved ? "explained" : ""}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="hint">Darker means a bigger move. Tap a holding for its ledger, numbers and filings.</p>
-      </section>
+      <nav className="jump views" aria-label="Views">
+        <button aria-current={view === "overview" ? "true" : undefined} onClick={() => go("overview")}>Overview</button>
+        <button aria-current={view === "filings" ? "true" : undefined} onClick={() => go("filings")}>Filings <b>{t1.length + t2.length}</b></button>
+        <button aria-current={view === "moves" ? "true" : undefined} onClick={() => go("moves")}>Moves <b>{mv.length}</b></button>
+      </nav>
 
-      {alerts.length > 0 && (
-        <section className="alerts" aria-label="Alerts">
-          <h2>
-            {alerts.length} alert{alerts.length > 1 ? "s" : ""} since you last looked
-            <button className="link" onClick={ackAlerts}>Mark read</button>
-          </h2>
-          {alerts.slice(0, 4).map((al) => (
-            <article key={al.id} className="alert">
-              <h3>{al.title}</h3>
-              <p className="why-care"><span>Why it matters</span>{al.why}</p>
-              <ul>{al.evidence.map((e) => <li key={e}>{e}</li>)}</ul>
-              <div>
-                {al.ann && <button className="btn ghost" onClick={() => openSource(detail(al.ann!, effective(al.ann!, settings).why))}>Open the filing</button>}
-                <button className="btn ghost" onClick={() => openCompany(al.symbol)}>Open {al.symbol} ledger</button>
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
-
-      {mv.length > 0 && (
-        <section>
-          <h2>Unusual moves</h2>
-          <p className="hint">Beyond ±{settings.pricePct}% in a day, or volume over {settings.volMult}× its 20-day average. You set these in Rules.</p>
-          <ul className="moves">
-            {mv.slice(0, 6).map((m) => (
-              <li key={m.symbol + m.date}>
-                <button onClick={() => (m.explainedBy ? openSource(detail(m.explainedBy, effective(m.explainedBy, settings).why)) : openCompany(m.symbol))}>
-                  <span className="sym">{m.symbol}</span>
-                  <span className={`delta ${m.pct >= 0 ? "up" : "down"}`}>{signed(m.pct)}</span>
-                  <span className="vol">{m.volMult.toFixed(1)}× volume</span>
-                  <span className={m.explainedBy ? "explained" : "unexplained"}>
-                    {m.explainedBy ? `Explained: ${CATEGORY_LABEL[m.explainedBy.category].toLowerCase()}` : "No filing explains it"}
-                  </span>
+      {view === "overview" && (
+        <>
+          {alerts.length > 0 && (
+            <section className="alerts" aria-label="Alerts">
+              <h2>
+                {alerts.length} new since you last looked
+                <button className="link" onClick={ackAlerts}>Mark read</button>
+              </h2>
+              {alerts.slice(0, 2).map((al) => (
+                <button key={al.id} className="alert" onClick={() => (al.ann ? openSource(detail(al.ann, effective(al.ann, settings).why)) : openCompany(al.symbol))}>
+                  <h3>{al.title}</h3>
+                  <p className="why-care"><span>Why it matters</span>{al.why}</p>
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+              ))}
+              {alerts.length > 2 && <p className="hint">{alerts.length - 2} more are in Filings and Moves.</p>}
+            </section>
+          )}
 
-      {(sc.explained.length + sc.unexplained.length + sc.quiet.length > 0) && (
-        <section>
-          <h2>Price against filings</h2>
-          <ul className="facts">
-            <li><b>{sc.explained.length}</b> unusual move{sc.explained.length === 1 ? "" : "s"} explained by a filing.</li>
-            <li className={sc.unexplained.length ? "bad" : ""}><b>{sc.unexplained.length}</b> with no filing behind {sc.unexplained.length === 1 ? "it" : "them"}{sc.unexplained.length ? `: ${[...new Set(sc.unexplained.map((m) => m.symbol))].join(", ")}.` : "."}</li>
-            <li><b>{sc.quiet.length}</b> material filing{sc.quiet.length === 1 ? "" : "s"} the price ignored (under 1% on the next session){sc.quiet.length ? `: ${[...new Set(sc.quiet.map((q) => q.a.symbol))].slice(0, 6).join(", ")}.` : "."} Either already priced in, or less material than ranked.</li>
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <h2>Matters <small>{t1.length}</small></h2>
-        {t1.length === 0 && (
-          <p className="empty">
-            Nothing material was filed in this window.
-            {settings.windowHours < 168 && snap.days >= 7 && (
-              <button className="link" onClick={() => update({ windowHours: 168 })}>Widen to 7 days</button>
+          <section>
+            <h2>Top of the list <small>{t1.length}</small></h2>
+            {t1.length === 0 && (
+              <p className="empty">
+                Nothing material was filed in this window.
+                {settings.windowHours < 168 && snap.days >= 7 && (
+                  <button className="link" onClick={() => update({ windowHours: 168 })}>Widen to 7 days</button>
+                )}
+              </p>
             )}
-          </p>
-        )}
-        {t1.map(({ a, e }) => (
-          <Swipe key={a.id} onBury={() => bury(a)}>
-            <article className="card" onClick={() => openSource(detail(a, e.why))} tabIndex={0} role="button"
-              onKeyDown={(ev) => ev.key === "Enter" && openSource(detail(a, e.why))}>
-              <div className="card-top">
-                <span className="co">{a.company}</span>
-                <span className="when">{ago(a.ts, asOf)}</span>
-              </div>
-              <p className="tag">{CATEGORY_LABEL[a.category]}</p>
-              {a.results ? (
-                <ResultsBlock r={a.results} onSource={() => openSource(resultsSource(a))} />
-              ) : a.person ? (
-                <div className="person">
-                  <h3>{a.person.person}</h3>
-                  <p className="role">
-                    {a.person.change.charAt(0).toUpperCase() + a.person.change.slice(1)} as {a.person.role}
-                    {a.person.effective ? `, effective ${a.person.effective}` : ""}
-                  </p>
-                  {a.person.bio && <p className="bio">{a.person.bio}</p>}
-                  {a.person.reason && <p className="bio">Reason given: {a.person.reason}</p>}
-                  {a.person.previous.length > 0 && (
-                    <p className="prev">Earlier at {a.person.previous.join(", ")}</p>
-                  )}
-                  <a className="src" href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(a.person.person + " " + a.company)}`}
-                    target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>
-                    Profile taken from the filing. Look them up on LinkedIn
-                  </a>
-                </div>
-              ) : (
-                <>
-                  <h3>{a.summary || tidy(a.headline)}</h3>
-                  {a.summary && <p className="sub">{tidy(a.headline)}</p>}
-                </>
-              )}
-              <p className="why">{e.why}{a.related?.length ? `. ${a.related.length} related filing${a.related.length > 1 ? "s" : ""} folded in` : ""}</p>
-            </article>
-          </Swipe>
-        ))}
-      </section>
-
-      {t2.length > 0 && (
-        <section>
-          <h2>Worth a glance <small>{t2.length}</small></h2>
-          <ul className="rows">
-            {t2.map(({ a, e }) => (
-              <li key={a.id}>
-                <Swipe onBury={() => bury(a)}>
-                  <button className="row" onClick={() => openSource(detail(a, e.why))}>
-                    <span className="row-main">
-                      <span className="co">{a.symbol}</span> {a.summary || tidy(a.headline)}
-                    </span>
-                    <span className="row-meta">{CATEGORY_LABEL[a.category]}, {ago(a.ts, asOf)}</span>
-                  </button>
-                </Swipe>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {buriedCount > 0 && (
-        <section className="buried">
-          <button className="buried-head" aria-expanded={showBuried} onClick={() => setShowBuried((v) => !v)}>
-            <span>{buriedCount} buried</span>
-            <span className="muted">{buriedKinds.slice(0, 3).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(", ")}</span>
-            <span className="chev">{showBuried ? "Hide" : "Show"}</span>
-          </button>
-          {showBuried && (
-            <ul className="rows faint">
-              {t3.map(({ a, e }) => (
+            <ul className="rows">
+              {topList.map(({ a, e }) => (
                 <li key={a.id}>
                   <button className="row" onClick={() => openSource(detail(a, e.why))}>
-                    <span className="row-main"><span className="co">{a.symbol}</span> {tidy(a.headline)}</span>
-                    <span className="row-meta">{e.why}</span>
+                    <span className="row-main"><span className="co">{a.company}</span></span>
+                    <span className="row-sub">{oneLine(a)}</span>
+                    <span className="row-meta">{CATEGORY_LABEL[a.category]}, {ago(a.ts, asOf)}</span>
                   </button>
                 </li>
               ))}
             </ul>
+            {t1.length + t2.length > 0 && (
+              <button className="btn ghost full" onClick={() => go("filings")}>
+                See all {t1.length} that matter{t2.length ? ` and ${t2.length} worth a glance` : ""}
+              </button>
+            )}
+          </section>
+
+          <section>
+            <h2>Your holdings <small>last session</small></h2>
+            <ul className="tiles">
+              {tiles.map((t) => (
+                <li key={t.symbol}>
+                  <button className={t.pct == null ? "" : t.pct >= 0 ? "up" : "down"} style={{ ["--heat" as string]: t.heat }} onClick={() => openCompany(t.symbol)}>
+                    <span className="t-sym">{t.symbol}</span>
+                    <span className="t-pct">{signed(t.pct)}</span>
+                    <span className="t-flag">{t.unexplained ? "unexplained" : t.matters ? `${t.matters} to read` : t.moved ? "explained" : ""}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="hint">Darker means a bigger move. Tap a holding for its ledger, numbers and filings.</p>
+            {mv.length > 0 && (
+              <button className="btn ghost full" onClick={() => go("moves")}>
+                {sc.unexplained.length
+                  ? `${sc.unexplained.length} unusual move${sc.unexplained.length > 1 ? "s" : ""} with no filing behind ${sc.unexplained.length > 1 ? "them" : "it"}`
+                  : `${mv.length} unusual move${mv.length > 1 ? "s" : ""}, all explained`}
+              </button>
+            )}
+          </section>
+        </>
+      )}
+
+      {view === "filings" && (
+        <>
+          <section>
+            <h2>Matters <small>{t1.length}</small></h2>
+            {t1.length === 0 && <p className="empty">Nothing material was filed in this window.</p>}
+            {shownMatters.map(card)}
+            {t1.length > 5 && (
+              <button className="btn ghost full" onClick={() => setMoreMatters((v) => !v)}>
+                {moreMatters ? "Show fewer" : `Show ${t1.length - 5} more`}
+              </button>
+            )}
+          </section>
+
+          {t2.length > 0 && (
+            <section>
+              <h2>Worth a glance <small>{t2.length}</small></h2>
+              <ul className="rows">
+                {shownGlance.map(({ a, e }) => (
+                  <li key={a.id}>
+                    <Swipe onBury={() => bury(a)}>
+                      <button className="row" onClick={() => openSource(detail(a, e.why))}>
+                        <span className="row-main">
+                          <span className="co">{a.symbol}</span> {a.summary || tidy(a.headline)}
+                        </span>
+                        <span className="row-meta">{CATEGORY_LABEL[a.category]}, {ago(a.ts, asOf)}</span>
+                      </button>
+                    </Swipe>
+                  </li>
+                ))}
+              </ul>
+              {t2.length > 6 && (
+                <button className="btn ghost full" onClick={() => setMoreGlance((v) => !v)}>
+                  {moreGlance ? "Show fewer" : `Show ${t2.length - 6} more`}
+                </button>
+              )}
+            </section>
           )}
-        </section>
+
+          {buriedCount > 0 && (
+            <section className="buried">
+              <h2>Buried as routine <small>{buriedCount}</small></h2>
+              <button className="buried-head" aria-expanded={showBuried} onClick={() => setShowBuried((v) => !v)}>
+                <span className="muted">{buriedKinds.slice(0, 3).map(([k, c]) => `${c} ${k.toLowerCase()}`).join(", ")}</span>
+                <span className="chev">{showBuried ? "Hide" : "Show"}</span>
+              </button>
+              {showBuried && (
+                <ul className="rows faint">
+                  {t3.map(({ a, e }) => (
+                    <li key={a.id}>
+                      <button className="row" onClick={() => openSource(detail(a, e.why))}>
+                        <span className="row-main"><span className="co">{a.symbol}</span> {tidy(a.headline)}</span>
+                        <span className="row-meta">{e.why}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+        </>
+      )}
+
+      {view === "moves" && (
+        <>
+          <section>
+            <h2>Unusual moves <small>{mv.length}</small></h2>
+            <p className="hint">Beyond ±{settings.pricePct}% in a day, or volume over {settings.volMult}× its 20-day average. You set these in Rules.</p>
+            {mv.length === 0 && <p className="empty">No holding crossed your thresholds in this window.</p>}
+            <ul className="moves">
+              {mv.map((m) => (
+                <li key={m.symbol + m.date}>
+                  <button onClick={() => (m.explainedBy ? openSource(detail(m.explainedBy, effective(m.explainedBy, settings).why)) : openCompany(m.symbol))}>
+                    <span className="sym">{m.symbol}</span>
+                    <span className={`delta ${m.pct >= 0 ? "up" : "down"}`}>{signed(m.pct)}</span>
+                    <span className="vol">{m.volMult.toFixed(1)}× volume</span>
+                    <span className={m.explainedBy ? "explained" : "unexplained"}>
+                      {dayLabel(Date.parse(m.date + "T12:00:00+05:30"))}. {m.explainedBy ? `Explained: ${CATEGORY_LABEL[m.explainedBy.category].toLowerCase()}` : "No filing explains it"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h2>Price against filings</h2>
+            <ul className="facts">
+              <li><b>{sc.explained.length}</b> unusual move{sc.explained.length === 1 ? "" : "s"} explained by a filing.</li>
+              <li className={sc.unexplained.length ? "bad" : ""}><b>{sc.unexplained.length}</b> with no filing behind {sc.unexplained.length === 1 ? "it" : "them"}{sc.unexplained.length ? `: ${[...new Set(sc.unexplained.map((m) => m.symbol))].join(", ")}.` : "."}</li>
+              <li><b>{sc.quiet.length}</b> material filing{sc.quiet.length === 1 ? "" : "s"} the price ignored (under 1% on the next session){sc.quiet.length ? `: ${[...new Set(sc.quiet.map((q) => q.a.symbol))].slice(0, 6).join(", ")}.` : "."} Either already priced in, or less material than ranked.</li>
+            </ul>
+          </section>
+        </>
       )}
     </div>
   );
